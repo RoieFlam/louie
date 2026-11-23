@@ -27,12 +27,19 @@ export class AnalyzeError extends Error {
   }
 }
 
-// Downscale before upload: faster, cheaper, and under the API's image size limit.
+// Downscale before upload: longest edge 1568px (Claude's sweet spot for detail),
+// JPEG 0.8. Keeps small labels readable while staying well under the size limit.
+const MAX_EDGE = 1568;
+
 async function toJpegBase64(uri: string) {
+  const original = await ImageManipulator.manipulate(uri).renderAsync();
+  const { width, height } = original;
   const ctx = ImageManipulator.manipulate(uri);
-  ctx.resize({ width: 1280 });
+  if (Math.max(width, height) > MAX_EDGE) {
+    ctx.resize(width >= height ? { width: MAX_EDGE } : { height: MAX_EDGE });
+  }
   const img = await ctx.renderAsync();
-  const out = await img.saveAsync({ base64: true, compress: 0.7, format: SaveFormat.JPEG });
+  const out = await img.saveAsync({ base64: true, compress: 0.8, format: SaveFormat.JPEG });
   if (!out.base64) throw new AnalyzeError('encode_failed');
   return out.base64.replace(/^data:image\/\w+;base64,/, '');
 }

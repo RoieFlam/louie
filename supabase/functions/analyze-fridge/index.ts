@@ -4,7 +4,7 @@ import Anthropic from "npm:@anthropic-ai/sdk@1.7.0";
 
 const MODEL = "claude-sonnet-5-5"; // balanced cost/quality, chosen for student-scale pricing
 const MAX_IMAGES = 3;
-const MAX_IMAGE_BYTES = 4_000_000; // base64 length guard per image
+const MAX_IMAGE_B64 = 6_600_000; // base64 length guard per image (~5MB decoded, the API limit)
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -63,7 +63,10 @@ const SYSTEM = `You are Louie, a friendly cooking buddy for students in Israel. 
 
 Rules:
 - Write everything in natural, casual Hebrew (masculine singular is fine). Item names short, like on a shopping list.
-- "items": what you see that is relevant to the recipe, plus at most 2 missing ingredients. status "expiring" for produce that looks like it should be used in 1-2 days (note e.g. "עוד יומיים"), "missing" only for something the recipe needs that is not visible (note "אפשר בלי" if the dish works without it). "have" items get an empty note.
+- Look carefully at every shelf, the door shelves and the drawers. Read Hebrew and English labels on packages and jars to identify them (e.g. "גבינה לבנה", "קוטג'", "ממרח", "רסק עגבניות").
+- Only list things you can actually see. Never invent items. If you are not sure what a package is, describe it generically ("קופסת גבינה", "צנצנת רוטב") or leave it out. A wrong item is worse than a missing one.
+- "items": list everything useful for cooking that you can identify (up to 20), most relevant to the recipe first, plus at most 2 missing ingredients. status "expiring" only for produce that clearly looks like it should be used in 1-2 days (note e.g. "עוד יומיים"); "missing" only for something the recipe needs that is not visible (note "אפשר בלי" if the dish works without it). "have" items get an empty note.
+- The recipe must be built mainly from items you listed as "have"/"expiring".
 - Prefer using expiring items. Assume a basic pantry exists: salt, pepper, oil, sugar, flour, common spices. Do not list those.
 - Cheap and simple: student budget, at most 30 minutes unless the user says otherwise. extra_cost is the rough shekel cost of missing items (0 if none needed).
 - 3 to 6 short steps, one action each, so each fits on one big screen. tip is a short practical hint or "". timer_sec is set only when the step is waiting/cooking for a known time, else 0.
@@ -89,12 +92,20 @@ Deno.serve(async (req) => {
   try {
     body = await req.json();
   } catch {
+    console.log(JSON.stringify({ rejected: "bad_json" }));
     return json({ error: "bad_json" }, 400);
   }
   const images = (body.images ?? []).slice(0, MAX_IMAGES);
   const allowed = ["image/jpeg", "image/png", "image/webp"];
-  if (images.length === 0 || images.some((i) => !allowed.includes(i.media_type) || !i.data || i.data.length > MAX_IMAGE_BYTES)) {
-    return json({ error: "bad_images" }, 400);
+  const bad = images.length === 0
+    ? "no_images"
+    : images.find((i) => !i.data) ? "empty_image"
+    : images.find((i) => !allowed.includes(i.media_type)) ? `bad_type:${images.map((i) => i.media_type).join(",")}`
+    : images.find((i) => i.data.length > MAX_IMAGE_B64) ? `too_big:${images.map((i) => i.data.length).join(",")}`
+    : null;
+  if (bad) {
+    console.log(JSON.stringify({ rejected: bad }));
+    return json({ error: "bad_images", detail: bad }, 400);
   }
 
   const notes: string[] = [];
@@ -109,7 +120,7 @@ Deno.serve(async (req) => {
       model: MODEL,
       max_tokens: 4000,
       system: SYSTEM,
-      output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
+      output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
       messages: [
         {
           role: "user",
