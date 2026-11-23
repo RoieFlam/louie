@@ -129,6 +129,15 @@ Deno.serve(async (req) => {
     const text = res.content.find((b) => b.type === "text");
     if (!text || text.type !== "text") return json({ error: "no_output" }, 502);
     const data = JSON.parse(text.text);
+    // Debug log for the pilot: no image data, only what Claude returned.
+    console.log(JSON.stringify({
+      images: images.length,
+      kb: images.map((i) => Math.round(i.data.length * 0.75 / 1024)),
+      problem: data.problem,
+      items: data.items?.map((i: { name: string; status: string }) => `${i.name}:${i.status}`),
+      title: data.recipe?.title,
+      usage: res.usage,
+    }));
     return json({ ...data, usage: { input: res.usage.input_tokens, output: res.usage.output_tokens } });
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError) return json({ error: "bad_api_key" }, 500);
