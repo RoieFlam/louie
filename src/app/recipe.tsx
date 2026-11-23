@@ -168,7 +168,8 @@ export default function RecipeScreen() {
         primary={{
           label: 'תן לי משהו אחר',
           onPress: () => {
-            s.nextRecipe(reason ?? undefined);
+            if (s.photoUri) s.setChangeRequest(reason ?? 'משהו אחר לגמרי');
+            else s.nextRecipe(reason ?? undefined);
             setOther(false);
             router.replace('/loading');
           },
