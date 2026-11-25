@@ -1,6 +1,8 @@
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Card, LouieSays, Row, Screen, TopBar, Txt } from '@/components/ui';
 import { AnalyzeError, suggestRecipes } from '@/lib/analyze';
@@ -14,6 +16,7 @@ export default function Review() {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<string | null>(null);
   const items = s.fridge;
 
   function remove(name: string) {
@@ -53,12 +56,30 @@ export default function Review() {
   return (
     <Screen>
       <TopBar step={1} onClose={() => router.dismissTo('/camera')} />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        stickyHeaderIndices={s.photos.length ? [1] : undefined}>
         <LouieSays mood={few ? 'sad' : 'happy'}>
           {few
             ? 'המקרר די ריק. תוסיף מה שיש בארון ואמצא משהו.'
             : `מצאתי ${items.length} דברים. משהו לא נכון? ✕ מוחק אותו.`}
         </LouieSays>
+
+        {s.photos.length > 0 && (
+          <Row gap={8} style={styles.photoBar}>
+            {s.photos.map((u) => (
+              <Pressable key={u} onPress={() => setZoom(u)} accessibilityRole="imagebutton" accessibilityLabel="הגדל תמונה" style={{ flex: 1 }}>
+                <Image source={{ uri: u }} style={styles.photo} contentFit="cover" />
+                <View style={styles.zoomHint}>
+                  <Txt size={11} weight="semibold" align="center">
+                    הגדלה ⤢
+                  </Txt>
+                </View>
+              </Pressable>
+            ))}
+          </Row>
+        )}
 
         <Card style={{ padding: 0, overflow: 'hidden' }}>
           <Row gap={8} style={styles.addRow}>
@@ -119,6 +140,19 @@ export default function Review() {
           onPress={findRecipes}
         />
       </View>
+
+      <Modal visible={!!zoom} transparent animationType="fade" onRequestClose={() => setZoom(null)}>
+        <View style={styles.zoomBg}>
+          {zoom && <Image source={{ uri: zoom }} style={StyleSheet.absoluteFill} contentFit="contain" />}
+          <SafeAreaView edges={['top']} style={{ alignItems: 'flex-start', padding: 16 }}>
+            <Pressable onPress={() => setZoom(null)} accessibilityRole="button" accessibilityLabel="סגור" style={styles.zoomClose}>
+              <Txt size={16} align="center" color="#FFFFFF">
+                ✕
+              </Txt>
+            </Pressable>
+          </SafeAreaView>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -141,5 +175,10 @@ const styles = StyleSheet.create({
   tag: { borderRadius: R.chip, paddingVertical: 4, paddingHorizontal: 10, borderWidth: 1, borderColor: C.line },
   tagOn: { backgroundColor: C.warnSoft, borderColor: C.warnSoft },
   x: { width: 28, height: 28, borderRadius: 14, backgroundColor: C.bg, justifyContent: 'center' },
+  photoBar: { backgroundColor: C.bg, paddingVertical: 6 },
+  photo: { height: 140, borderRadius: 16, backgroundColor: C.surface },
+  zoomHint: { position: 'absolute', bottom: 8, left: 8, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 999, paddingVertical: 3, paddingHorizontal: 8 },
+  zoomBg: { flex: 1, backgroundColor: '#000000' },
+  zoomClose: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center' },
   actions: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 12, gap: 8, borderTopWidth: 1, borderTopColor: C.line, backgroundColor: C.bg },
 });
