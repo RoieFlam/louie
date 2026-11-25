@@ -9,7 +9,7 @@ export type AnalyzeResult = { problem: Problem; items: Item[]; recipe: Recipe };
 
 type ApiResult = {
   problem: Problem;
-  items: { name: string; status: Item['status']; note: string }[];
+  items: { name: string; status: Item['status']; note: string; in_recipe: boolean }[];
   recipe: {
     title: string;
     minutes: number;
@@ -50,7 +50,7 @@ export async function analyzeFridge(
 ): Promise<AnalyzeResult> {
   const images = await Promise.all(photoUris.map(async (u) => ({ data: await toJpegBase64(u), media_type: 'image/jpeg' })));
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60_000);
+  const timer = setTimeout(() => controller.abort(), 90_000);
   let res: Response;
   try {
     res = await fetch(`${SUPABASE_URL}/functions/v1/analyze-fridge`, {
@@ -70,7 +70,7 @@ export async function analyzeFridge(
   const r = data.recipe;
   return {
     problem: data.problem,
-    items: data.items.map((i) => ({ name: i.name, status: i.status, note: i.note || undefined })),
+    items: data.items.map((i) => ({ name: i.name, status: i.status, note: i.note || undefined, inRecipe: i.in_recipe })),
     recipe: {
       id: `ai-${Date.now()}`,
       title: r.title,

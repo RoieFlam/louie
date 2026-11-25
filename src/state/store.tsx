@@ -4,8 +4,8 @@ import { DEFAULT_STAPLES, RECIPES, type Item, type Recipe } from '@/data/mock';
 
 // In-memory app state for the pilot. Later: Supabase (per user) + local cache.
 type Store = {
-  photoUri: string | null;
-  setPhotoUri: (u: string | null) => void;
+  photos: string[];
+  setPhotos: (u: string[]) => void;
   recipe: Recipe;
   items: Item[];
   setItems: (i: Item[]) => void;
@@ -31,7 +31,7 @@ type Store = {
 const Ctx = createContext<Store | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
   const [recipeIdx, setRecipeIdx] = useState(0);
   const [aiRecipe, setAiRecipe] = useState<Recipe | null>(null);
   const [changeRequest, setChangeRequest] = useState<string | null>(null);
@@ -46,8 +46,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Store>(
     () => ({
-      photoUri,
-      setPhotoUri,
+      photos,
+      setPhotos,
       recipe: aiRecipe ?? RECIPES[recipeIdx],
       items,
       setItems,
@@ -79,7 +79,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       mealsThisWeek,
       addMeal: () => setMeals((m) => m + 1),
     }),
-    [photoUri, recipeIdx, aiRecipe, changeRequest, seenTitles, items, cameraExplained, prefs, prefAskedThisSession, staples, reminder, mealsThisWeek],
+    [photos, recipeIdx, aiRecipe, changeRequest, seenTitles, items, cameraExplained, prefs, prefAskedThisSession, staples, reminder, mealsThisWeek],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

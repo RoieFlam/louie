@@ -36,6 +36,13 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Louie צריך את המצלמה כדי לצלם את המקרר ולמצוא לך מתכון.",
+          "recordAudioAndroid": false
+        }
       ]
     ],
     "experiments": {

@@ -9,14 +9,20 @@ import { C, F, R } from '@/theme';
 
 const nextStatus: Record<ItemStatus, ItemStatus | null> = { have: 'expiring', expiring: 'missing', missing: null };
 
+const chipLabel = (i: Item) => (i.status === 'missing' ? `חסר: ${i.name}` : i.name) + (i.note ? ` · ${i.note}` : '');
+
 export default function RecipeScreen() {
   const s = useStore();
   const r = s.recipe;
   const [editing, setEditing] = useState<Item | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const [adding, setAdding] = useState(false);
   const [newItem, setNewItem] = useState('');
   const [other, setOther] = useState(false);
   const [reason, setReason] = useState<string | null>(null);
+
+  const used = s.items.filter((i) => i.inRecipe || i.status === 'missing');
+  const rest = s.items.filter((i) => !i.inRecipe && i.status !== 'missing');
 
   // One preference question per session, only one not answered yet.
   const pref = useMemo(() => PREF_QUESTIONS.find((p) => !s.prefs[p.id]), [s.prefs]);
@@ -32,11 +38,9 @@ export default function RecipeScreen() {
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
         <Row style={{ justifyContent: 'space-between' }}>
-          <View style={styles.badge}>
-            <Txt size={13} weight="medium" color={C.accent}>
-              {`Louie מצא ${s.items.filter((i) => i.status !== 'missing').length} מצרכים`}
-            </Txt>
-          </View>
+          <Txt size={14} weight="medium" color={C.muted}>
+            הערב אצלך:
+          </Txt>
           <Pressable style={styles.close} onPress={() => router.dismissTo('/camera')} accessibilityLabel="סגור">
             <Txt size={16} align="center">
               ✕
@@ -45,55 +49,68 @@ export default function RecipeScreen() {
         </Row>
 
         <View style={styles.hero}>
-          <View style={styles.plate}>
-            <Txt size={88} align="center" style={{ lineHeight: 100 }}>
-              {r.emoji}
-            </Txt>
-          </View>
+          <Txt size={84} align="center" style={{ lineHeight: 100 }}>
+            {r.emoji}
+          </Txt>
           <View style={styles.heroMascot}>
-            <Mascot mood="happy" size={86} />
+            <Mascot mood="happy" size={72} />
           </View>
         </View>
 
-        <Txt size={26} weight="bold">
+        <Txt size={28} weight="bold" style={{ marginTop: 4 }}>
           {r.title}
         </Txt>
-        <Txt size={14} color={C.muted}>
-          {`${r.minutes} דקות · ₪${r.extraCost} נוספים · ${r.level}`}
-        </Txt>
+        <Row gap={6}>
+          {[`${r.minutes} דק׳`, r.extraCost ? `₪${r.extraCost} לקנות` : 'בלי לקנות כלום', r.level].map((m) => (
+            <View key={m} style={styles.meta}>
+              <Txt size={13} weight="medium" color={C.accent}>
+                {m}
+              </Txt>
+            </View>
+          ))}
+        </Row>
 
-        <Txt size={16} weight="semibold" style={{ marginTop: 12 }}>
-          מה ראיתי במקרר
+        <Txt size={17} weight="semibold" style={styles.section}>
+          מה צריך
         </Txt>
         <Wrap>
-          {s.items.map((i) => (
-            <Chip
-              key={i.name}
-              dot
-              tone={i.status}
-              label={i.note ? `${i.status === 'missing' ? 'חסר: ' : ''}${i.name} · ${i.note}` : i.name}
-              onPress={() => setEditing(i)}
-            />
+          {used.map((i) => (
+            <Chip key={i.name} dot tone={i.status} label={chipLabel(i)} onPress={() => setEditing(i)} />
           ))}
-          <Chip label="+ הוסף" onPress={() => setAdding(true)} />
         </Wrap>
-        <Txt size={13} weight="medium" color={C.accent}>
-          אפשר ללחוץ על מצרך כדי לתקן, או להוסיף מה שפספסתי
-        </Txt>
+        <Pressable onPress={() => setShowAll(true)} accessibilityRole="button" style={{ paddingVertical: 4 }}>
+          <Txt size={14} weight="medium" color={C.accent}>
+            {rest.length > 0 ? `ועוד ${rest.length} דברים שראיתי במקרר · תיקון ›` : 'פספסתי משהו? תיקון ›'}
+          </Txt>
+        </Pressable>
 
-        <Txt size={14} color={C.muted} style={{ marginTop: 8 }}>
-          {`איך מכינים: ${r.steps.length} שלבים, אחד בכל מסך, עם טיימר`}
+        <Txt size={17} weight="semibold" style={styles.section}>
+          {`איך מכינים · ${r.steps.length} שלבים`}
         </Txt>
+        <View style={{ gap: 8 }}>
+          {r.steps.map((st, k) => (
+            <Row key={k} gap={10} style={{ alignItems: 'flex-start' }}>
+              <View style={styles.num}>
+                <Txt size={13} weight="bold" color={C.accent} align="center">
+                  {k + 1}
+                </Txt>
+              </View>
+              <Txt size={15} color={C.ink} style={{ flex: 1 }}>
+                {st.text}
+              </Txt>
+            </Row>
+          ))}
+        </View>
 
         {showPref && pref && (
           <View style={styles.pref}>
             {s.prefs[pref.id] ? (
-              <Txt size={15} weight="semibold">
+              <Txt size={14} weight="semibold">
                 תודה! אזכור את זה.
               </Txt>
             ) : (
               <>
-                <Txt size={15} weight="semibold">
+                <Txt size={14} weight="semibold">
                   {pref.q}
                 </Txt>
                 <Row>
@@ -105,15 +122,12 @@ export default function RecipeScreen() {
                         s.answerPref(pref.id, a);
                         s.setPrefAskedThisSession(true);
                       }}>
-                      <Txt size={14} weight="medium" align="center">
+                      <Txt size={13} weight="medium" align="center">
                         {a}
                       </Txt>
                     </Pressable>
                   ))}
                 </Row>
-                <Txt size={12} color={C.muted}>
-                  אפשר לדלג. Louie ישאל שאלה אחת בכל פעם.
-                </Txt>
               </>
             )}
           </View>
@@ -134,8 +148,39 @@ export default function RecipeScreen() {
           label: editing?.status === 'have' ? 'עומד להיגמר' : editing?.status === 'expiring' ? 'בעצם אין לי' : 'להוריד מהרשימה',
           onPress: () => editing && cycle(editing),
         }}
-        secondary={{ label: 'זה נכון, יש לי', onPress: () => setEditing(null) }}
+        secondary={{ label: 'זה נכון', onPress: () => setEditing(null) }}
       />
+
+      <Sheet
+        visible={showAll}
+        onClose={() => setShowAll(false)}
+        title="מה ראיתי במקרר"
+        body="לחיצה על מצרך כדי לתקן."
+        primary={{ label: 'סגור', onPress: () => setShowAll(false) }}
+        secondary={{
+          label: '+ הוסף משהו שפספסתי',
+          onPress: () => {
+            setShowAll(false);
+            setAdding(true);
+          },
+        }}>
+        <ScrollView style={{ maxHeight: 260, alignSelf: 'stretch' }}>
+          <Wrap style={{ justifyContent: 'center' }}>
+            {s.items.map((i) => (
+              <Chip
+                key={i.name}
+                dot
+                tone={i.status}
+                label={chipLabel(i)}
+                onPress={() => {
+                  setShowAll(false);
+                  setEditing(i);
+                }}
+              />
+            ))}
+          </Wrap>
+        </ScrollView>
+      </Sheet>
 
       <Sheet
         visible={adding}
@@ -164,11 +209,11 @@ export default function RecipeScreen() {
         visible={other}
         onClose={() => setOther(false)}
         title="מה לשנות?"
-        body="בחירה אחת מספיקה. Louie ימצא משהו אחר ממה שיש לך."
+        body="בחירה אחת מספיקה. אמצא משהו אחר ממה שיש לך."
         primary={{
           label: 'תן לי משהו אחר',
           onPress: () => {
-            if (s.photoUri) s.setChangeRequest(reason ?? 'משהו אחר לגמרי');
+            if (s.photos.length) s.setChangeRequest(reason ?? 'משהו אחר לגמרי');
             else s.nextRecipe(reason ?? undefined);
             setOther(false);
             router.replace('/loading');
@@ -186,14 +231,15 @@ export default function RecipeScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 24, paddingBottom: 24, gap: 10 },
-  badge: { backgroundColor: C.accentSoft, borderRadius: R.chip, paddingVertical: 6, paddingHorizontal: 12 },
+  content: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 24, gap: 10 },
   close: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
-  hero: { height: 210, borderRadius: 24, backgroundColor: C.sky, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
-  plate: { width: 150, height: 150, borderRadius: 75, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
-  heroMascot: { position: 'absolute', bottom: 6, left: 10 },
-  pref: { backgroundColor: C.accentSoft, borderRadius: R.card, padding: 16, gap: 10, marginTop: 6 },
-  answer: { backgroundColor: C.surface, borderRadius: R.chip, paddingVertical: 8, paddingHorizontal: 14 },
+  hero: { height: 170, borderRadius: 24, backgroundColor: C.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  heroMascot: { position: 'absolute', bottom: 4, left: 8 },
+  meta: { backgroundColor: C.surface, borderRadius: R.chip, paddingVertical: 5, paddingHorizontal: 10 },
+  section: { marginTop: 10 },
+  num: { width: 24, height: 24, borderRadius: 12, backgroundColor: C.accentSoft, justifyContent: 'center' },
+  pref: { backgroundColor: C.surface, borderRadius: R.card, padding: 14, gap: 10, marginTop: 10, borderWidth: 1, borderColor: C.line },
+  answer: { backgroundColor: C.bg, borderRadius: R.chip, paddingVertical: 7, paddingHorizontal: 12 },
   actions: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 12, borderTopWidth: 1, borderTopColor: C.line, backgroundColor: C.bg },
   input: {
     alignSelf: 'stretch',

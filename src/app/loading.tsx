@@ -10,13 +10,6 @@ import { C } from '@/theme';
 
 // Detection is merged into the loading moment: chips "pop" as items are found,
 // then we go straight to the recipe.
-const SPOTS = [
-  { top: '18%', right: '14%' },
-  { top: '34%', left: '12%' },
-  { top: '58%', right: '22%' },
-  { top: '72%', left: '20%' },
-  { top: '46%', right: '40%' },
-] as const;
 
 const PROBLEM_TEXT: Record<Exclude<Problem, 'none' | 'almost_empty'>, { title: string; body: string }> = {
   too_dark: { title: 'קצת חשוך פה', body: 'תדליק את האור במקרר או תתקרב, ונצלם שוב.' },
@@ -35,14 +28,14 @@ export default function Loading() {
   const [problem, setProblem] = useState<Problem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pending = useRef<AnalyzeResult | null>(null);
-  const anims = useRef(SPOTS.map(() => new Animated.Value(0))).current;
+  const anims = useRef(Array.from({ length: 12 }, () => new Animated.Value(0))).current;
 
   function popChips(names: string[], then: () => void) {
     setFound(names);
-    names.slice(0, SPOTS.length).forEach((_, i) =>
-      setTimeout(() => Animated.spring(anims[i], { toValue: 1, useNativeDriver: true, friction: 5 }).start(), 150 + i * 300),
+    names.slice(0, 12).forEach((_, i) =>
+      setTimeout(() => Animated.spring(anims[i], { toValue: 1, useNativeDriver: true, friction: 5 }).start(), 150 + i * 180),
     );
-    setTimeout(then, 150 + Math.min(names.length, SPOTS.length) * 300 + 700);
+    setTimeout(then, 150 + Math.min(names.length, 12) * 180 + 900);
   }
 
   function goToRecipe() {
@@ -53,7 +46,7 @@ export default function Loading() {
 
   useEffect(() => {
     let alive = true;
-    if (!s.photoUri) {
+    if (s.photos.length === 0) {
       // Sample mode (no real photo): use the built-in sample recipe.
       popChips(
         s.items.filter((i) => i.status !== 'missing').map((i) => i.name),
@@ -63,7 +56,7 @@ export default function Loading() {
         alive = false;
       };
     }
-    analyzeFridge([s.photoUri], {
+    analyzeFridge(s.photos, {
       prefs: s.prefs,
       changeRequest: s.changeRequest ?? undefined,
       avoidTitles: s.seenTitles,
@@ -127,15 +120,22 @@ export default function Loading() {
   return (
     <Screen bg={C.night}>
       <View style={styles.photo}>
-        {s.photoUri ? (
-          <Image source={{ uri: s.photoUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+        {s.photos[0] ? (
+          <Image source={{ uri: s.photos[0] }} style={StyleSheet.absoluteFill} contentFit="cover" />
         ) : (
           <View style={[StyleSheet.absoluteFill, styles.samplePhoto]}>
             <View style={styles.shelf} />
           </View>
         )}
-        {found.slice(0, SPOTS.length).map((name, i) => (
-          <Animated.View key={name} style={[styles.pill, SPOTS[i], { opacity: anims[i], transform: [{ scale: anims[i] }] }]}>
+        {s.photos.length > 1 && (
+          <View style={styles.more}>
+            <Txt size={13} weight="semibold" align="center">{`+${s.photos.length - 1}`}</Txt>
+          </View>
+        )}
+      </View>
+      <View style={styles.found}>
+        {found.slice(0, 12).map((name, i) => (
+          <Animated.View key={name} style={[styles.pill, { opacity: anims[i] ?? 1, transform: [{ scale: anims[i] ?? 1 }] }]}>
             <Txt size={14} weight="semibold" align="center">
               {name}
             </Txt>
@@ -156,11 +156,12 @@ export default function Loading() {
 }
 
 const styles = StyleSheet.create({
-  photo: { flex: 1, marginHorizontal: 24, marginTop: 24, borderRadius: 28, overflow: 'hidden', backgroundColor: '#DCEAF2' },
+  photo: { flex: 1, maxHeight: 380, marginHorizontal: 24, marginTop: 24, borderRadius: 28, overflow: 'hidden', backgroundColor: '#DCEAF2' },
   samplePhoto: { backgroundColor: '#E4EFF5' },
   shelf: { position: 'absolute', top: '52%', left: 0, right: 0, height: 3, backgroundColor: '#FFFFFF' },
+  found: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'center', gap: 8, paddingHorizontal: 24, paddingTop: 16, minHeight: 40 },
+  more: { position: 'absolute', bottom: 12, left: 12, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },
   pill: {
-    position: 'absolute',
     backgroundColor: '#FFFFFF',
     borderRadius: 999,
     paddingVertical: 6,

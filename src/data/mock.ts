@@ -7,6 +7,7 @@ export type Item = {
   name: string;
   status: ItemStatus;
   note?: string;
+  inRecipe?: boolean; // used by the current recipe (shown first); others are "also in your fridge"
 };
 
 export type Step = {
@@ -35,12 +36,12 @@ export const RECIPES: Recipe[] = [
     level: 'קל',
     emoji: '🍳',
     items: [
-      { name: 'תרד', status: 'expiring', note: 'עוד יומיים' },
-      { name: 'ביצים', status: 'have' },
-      { name: 'עגבניות', status: 'have' },
-      { name: 'פטה', status: 'have' },
-      { name: 'בצל', status: 'have' },
-      { name: 'כמון', status: 'missing', note: 'אפשר בלי' },
+      { name: 'תרד', status: 'expiring', note: 'עוד יומיים', inRecipe: true },
+      { name: 'ביצים', status: 'have', inRecipe: true },
+      { name: 'עגבניות', status: 'have', inRecipe: true },
+      { name: 'פטה', status: 'have', inRecipe: true },
+      { name: 'בצל', status: 'have', inRecipe: true },
+      { name: 'כמון', status: 'missing', note: 'אפשר בלי', inRecipe: true },
     ],
     steps: [
       { text: 'מטגנים בצל ושום 3 דקות', tip: 'אש בינונית, עד שהבצל שקוף.', timerSec: 180 },
@@ -57,11 +58,11 @@ export const RECIPES: Recipe[] = [
     level: 'קל מאוד',
     emoji: '🍝',
     items: [
-      { name: 'פסטה', status: 'have' },
-      { name: 'עגבניות', status: 'have' },
-      { name: 'פטה', status: 'have' },
-      { name: 'שום', status: 'have' },
-      { name: 'בזיליקום', status: 'missing', note: 'אפשר בלי' },
+      { name: 'פסטה', status: 'have', inRecipe: true },
+      { name: 'עגבניות', status: 'have', inRecipe: true },
+      { name: 'פטה', status: 'have', inRecipe: true },
+      { name: 'שום', status: 'have', inRecipe: true },
+      { name: 'בזיליקום', status: 'missing', note: 'אפשר בלי', inRecipe: true },
     ],
     steps: [
       { text: 'מבשלים פסטה במים רותחים עם מלח', timerSec: 600 },
@@ -77,10 +78,10 @@ export const RECIPES: Recipe[] = [
     level: 'קל מאוד',
     emoji: '🥙',
     items: [
-      { name: 'ביצים', status: 'have' },
-      { name: 'תרד', status: 'expiring', note: 'עוד יומיים' },
-      { name: 'פטה', status: 'have' },
-      { name: 'פיתות', status: 'have' },
+      { name: 'ביצים', status: 'have', inRecipe: true },
+      { name: 'תרד', status: 'expiring', note: 'עוד יומיים', inRecipe: true },
+      { name: 'פטה', status: 'have', inRecipe: true },
+      { name: 'פיתות', status: 'have', inRecipe: true },
     ],
     steps: [
       { text: 'מקציפים 3 ביצים עם קורט מלח' },

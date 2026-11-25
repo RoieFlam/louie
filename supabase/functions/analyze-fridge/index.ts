@@ -2,7 +2,7 @@
 // The Anthropic key is read from the ANTHROPIC_API_KEY secret. It never reaches the app.
 import Anthropic from "npm:@anthropic-ai/sdk@1.7.0";
 
-const MODEL = "claude-sonnet-5-5"; // balanced cost/quality, chosen for student-scale pricing
+const MODEL = "claude-opus-5-5"; // best vision accuracy; ~2x Sonnet cost (~10 agorot per scan)
 const MAX_IMAGES = 3;
 const MAX_IMAGE_B64 = 6_600_000; // base64 length guard per image (~5MB decoded, the API limit)
 
@@ -23,11 +23,12 @@ const SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["name", "status", "note"],
+        required: ["name", "status", "note", "in_recipe"],
         properties: {
           name: { type: "string" },
           status: { type: "string", enum: ["have", "expiring", "missing"] },
           note: { type: "string" },
+          in_recipe: { type: "boolean" },
         },
       },
     },
@@ -63,10 +64,11 @@ const SYSTEM = `You are Louie, a friendly cooking buddy for students in Israel. 
 
 Rules:
 - Write everything in natural, casual Hebrew (masculine singular is fine). Item names short, like on a shopping list.
-- Look carefully at every shelf, the door shelves and the drawers. Read Hebrew and English labels on packages and jars to identify them (e.g. "גבינה לבנה", "קוטג'", "ממרח", "רסק עגבניות").
-- Only list things you can actually see. Never invent items. If you are not sure what a package is, describe it generically ("קופסת גבינה", "צנצנת רוטב") or leave it out. A wrong item is worse than a missing one.
-- "items": list everything useful for cooking that you can identify (up to 20), most relevant to the recipe first, plus at most 2 missing ingredients. status "expiring" only for produce that clearly looks like it should be used in 1-2 days (note e.g. "עוד יומיים"); "missing" only for something the recipe needs that is not visible (note "אפשר בלי" if the dish works without it). "have" items get an empty note.
-- The recipe must be built mainly from items you listed as "have"/"expiring".
+- Work in two passes. Pass 1, inventory: go shelf by shelf (top to bottom), then the door shelves, then the drawers, across all photos. Read Hebrew and English labels on packages and jars (e.g. "גבינה לבנה", "קוטג'", "חומוס", "מחית קארי", "רוטב סויה"). Note produce in bags too. Pass 2: choose the recipe from that inventory.
+- "items" = the full inventory: every distinct food item you can identify (aim for completeness, up to 40), no duplicates across photos. Set in_recipe=true for items the recipe uses, and list those first.
+- Only list things you can actually see. Never invent items. If you are not sure what a package is, describe it generically ("קופסת גבינה", "צנצנת רוטב"). A wrong item is worse than a generic one.
+- status "expiring" only for produce that clearly looks like it should be used in 1-2 days (note e.g. "עוד יומיים"). Add at most 2 "missing" items (in_recipe=true) the recipe needs that are not visible (note "אפשר בלי" if the dish works without it). Other items get an empty note.
+- The recipe must be built mainly from items you saw.
 - Prefer using expiring items. Assume a basic pantry exists: salt, pepper, oil, sugar, flour, common spices. Do not list those.
 - Cheap and simple: student budget, at most 30 minutes unless the user says otherwise. extra_cost is the rough shekel cost of missing items (0 if none needed).
 - 3 to 6 short steps, one action each, so each fits on one big screen. tip is a short practical hint or "". timer_sec is set only when the step is waiting/cooking for a known time, else 0.
@@ -118,7 +120,7 @@ Deno.serve(async (req) => {
   try {
     const res = await client.messages.create({
       model: MODEL,
-      max_tokens: 4000,
+      max_tokens: 8000,
       system: SYSTEM,
       output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA } },
       messages: [
@@ -129,7 +131,7 @@ Deno.serve(async (req) => {
               type: "image" as const,
               source: { type: "base64" as const, media_type: i.media_type as "image/jpeg", data: i.data },
             })),
-            { type: "text" as const, text: ["What should I cook tonight?", ...notes].join("\n") },
+            { type: "text" as const, text: [images.length > 1 ? `These ${images.length} photos are of the same fridge (different shelves/door/drawers).` : "", "What should I cook tonight?", ...notes].filter(Boolean).join("\n") },
           ],
         },
       ],
