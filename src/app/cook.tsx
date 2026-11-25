@@ -12,7 +12,7 @@ const mmss = (sec: number) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:
 export default function Cook() {
   useKeepAwake(); // screen stays on while cooking
   const s = useStore();
-  const steps = s.recipe.steps;
+  const steps = s.recipe?.steps ?? [{ text: 'אין מתכון פתוח' }];
   const [i, setI] = useState(0);
   const step = steps[i];
   const [left, setLeft] = useState(step.timerSec ?? 0);
@@ -41,7 +41,7 @@ export default function Cook() {
               {`שלב ${i + 1} מתוך ${steps.length}`}
             </Txt>
             <Txt size={13} color={C.muted}>
-              {s.recipe.title}
+              {s.recipe?.title ?? ''}
             </Txt>
           </View>
           <Pressable style={styles.close} onPress={() => router.back()} accessibilityLabel="חזרה למתכון">

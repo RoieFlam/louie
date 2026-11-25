@@ -189,4 +189,86 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   handle: { width: 40, height: 5, borderRadius: 3, backgroundColor: C.line },
+  bubble: {
+    flex: 1,
+    backgroundColor: C.surface,
+    borderRadius: 18,
+    borderBottomRightRadius: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: C.line,
+  },
+  card: { backgroundColor: C.surface, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: C.line },
 });
+
+// ---- Shared layout pieces, so every screen speaks the same visual language ----
+
+const STEPS = ['צילום', 'בדיקה', 'מתכון'];
+
+export function Steps({ active, dark }: { active: 0 | 1 | 2; dark?: boolean }) {
+  return (
+    <Row gap={6} style={{ justifyContent: 'center' }}>
+      {STEPS.map((label, i) => {
+        const on = i <= active;
+        return (
+          <Row key={label} gap={6}>
+            <View
+              style={{
+                paddingVertical: 4,
+                paddingHorizontal: 10,
+                borderRadius: R.chip,
+                backgroundColor: i === active ? C.accent : on ? C.accentSoft : dark ? 'rgba(255,255,255,0.16)' : C.surface,
+              }}>
+              <Txt size={12} weight="semibold" align="center" color={i === active ? C.onAccent : on ? C.accent : dark ? '#E3F1F9' : C.muted}>
+                {`${i + 1} · ${label}`}
+              </Txt>
+            </View>
+            {i < STEPS.length - 1 && <View style={{ width: 10, height: 2, borderRadius: 1, backgroundColor: dark ? 'rgba(255,255,255,0.3)' : C.line }} />}
+          </Row>
+        );
+      })}
+    </Row>
+  );
+}
+
+export function TopBar({ step, onClose, dark }: { step: 0 | 1 | 2; onClose?: () => void; dark?: boolean }) {
+  return (
+    <Row style={{ justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 6 }}>
+      <View style={{ width: 36 }} />
+      <Steps active={step} dark={dark} />
+      {onClose ? (
+        <Pressable
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="סגור"
+          style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: dark ? 'rgba(255,255,255,0.16)' : C.surface, alignItems: 'center', justifyContent: 'center' }}>
+          <Txt size={15} align="center" color={dark ? '#FFFFFF' : C.ink}>
+            ✕
+          </Txt>
+        </Pressable>
+      ) : (
+        <View style={{ width: 36 }} />
+      )}
+    </Row>
+  );
+}
+
+// Louie as a guide: one short line per screen, always in the same place and shape.
+export function LouieSays({ mood = 'happy', children }: { mood?: keyof typeof mascots; children: ReactNode }) {
+  return (
+    <Row gap={10} style={{ alignItems: 'flex-end' }}>
+      <Mascot mood={mood} size={52} />
+      <View style={styles.bubble}>
+        <Txt size={15} weight="medium">
+          {children}
+        </Txt>
+      </View>
+    </Row>
+  );
+}
+
+export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  return <View style={[styles.card, style]}>{children}</View>;
+}
+

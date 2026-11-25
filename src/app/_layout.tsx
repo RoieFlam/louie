@@ -33,6 +33,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="camera" options={{ animation: 'fade' }} />
           <Stack.Screen name="loading" options={{ animation: 'fade', gestureEnabled: false }} />
+          <Stack.Screen name="review" />
           <Stack.Screen name="recipe" />
           <Stack.Screen name="cook" />
           <Stack.Screen name="cooked" options={{ animation: 'fade' }} />

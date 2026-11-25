@@ -1,19 +1,21 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
-import { DEFAULT_STAPLES, RECIPES, type Item, type Recipe } from '@/data/mock';
+import { RECIPES } from '@/data/mock';
+import type { FridgeItem, SuggestedRecipe } from '@/lib/analyze';
 
 // In-memory app state for the pilot. Later: Supabase (per user) + local cache.
 type Store = {
   photos: string[];
   setPhotos: (u: string[]) => void;
-  recipe: Recipe;
-  items: Item[];
-  setItems: (i: Item[]) => void;
-  nextRecipe: (reason?: string) => void;
-  setRecipe: (r: Recipe, items: Item[]) => void;
-  changeRequest: string | null;
-  setChangeRequest: (r: string | null) => void;
+  fridge: FridgeItem[]; // what Louie saw, after the user's edits
+  setFridge: (i: FridgeItem[]) => void;
+  options: SuggestedRecipe[]; // the 3 cards Louie suggested
+  setOptions: (o: SuggestedRecipe[]) => void;
+  recipe: SuggestedRecipe | null; // the one the user picked
+  setRecipe: (r: SuggestedRecipe) => void;
   seenTitles: string[];
+  sampleMode: boolean;
+  startSample: () => void;
   cameraExplained: boolean;
   setCameraExplained: (v: boolean) => void;
   prefs: Record<string, string>;
@@ -30,13 +32,35 @@ type Store = {
 
 const Ctx = createContext<Store | null>(null);
 
+function sampleRecipe(idx: number): SuggestedRecipe {
+  const r = RECIPES[idx % RECIPES.length];
+  return {
+    ...r,
+    uses: r.items.filter((i) => i.status !== 'missing').map((i) => i.name),
+    missing: r.items.filter((i) => i.status === 'missing').map((i) => ({ name: i.name, optional: i.note === 'אפשר בלי' })),
+  };
+}
+
+const SAMPLE_FRIDGE: FridgeItem[] = [
+  { name: 'תרד', expiring: true },
+  { name: 'ביצים', expiring: false },
+  { name: 'עגבניות', expiring: false },
+  { name: 'פטה', expiring: false },
+  { name: 'בצל', expiring: false },
+  { name: 'פסטה', expiring: false },
+  { name: 'שום', expiring: false },
+  { name: 'פיתות', expiring: false },
+  { name: 'יוגורט', expiring: false },
+  { name: 'מלפפונים', expiring: false },
+];
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [photos, setPhotos] = useState<string[]>([]);
-  const [recipeIdx, setRecipeIdx] = useState(0);
-  const [aiRecipe, setAiRecipe] = useState<Recipe | null>(null);
-  const [changeRequest, setChangeRequest] = useState<string | null>(null);
+  const [fridge, setFridge] = useState<FridgeItem[]>([]);
+  const [options, setOptionsState] = useState<SuggestedRecipe[]>([]);
+  const [recipe, setRecipe] = useState<SuggestedRecipe | null>(null);
   const [seenTitles, setSeenTitles] = useState<string[]>([]);
-  const [items, setItems] = useState<Item[]>(RECIPES[0].items);
+  const [sampleMode, setSampleMode] = useState(false);
   const [cameraExplained, setCameraExplained] = useState(false);
   const [prefs, setPrefs] = useState<Record<string, string>>({});
   const [prefAskedThisSession, setPrefAskedThisSession] = useState(false);
@@ -47,25 +71,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Store>(
     () => ({
       photos,
-      setPhotos,
-      recipe: aiRecipe ?? RECIPES[recipeIdx],
-      items,
-      setItems,
-      nextRecipe: () => {
-        // Sample mode only; with a real photo the loading screen asks Claude again.
-        const n = (recipeIdx + 1) % RECIPES.length;
-        setAiRecipe(null);
-        setRecipeIdx(n);
-        setItems(RECIPES[n].items);
+      setPhotos: (p) => {
+        setSampleMode(false);
+        setPhotos(p);
       },
-      setRecipe: (r, i) => {
-        setAiRecipe(r);
-        setItems(i);
-        setSeenTitles((t) => [...t.slice(-9), r.title]);
+      fridge,
+      setFridge,
+      options,
+      setOptions: (o) => {
+        setOptionsState(o);
+        setSeenTitles((t) => [...t, ...o.map((r) => r.title)].slice(-12));
       },
-      changeRequest,
-      setChangeRequest,
+      recipe,
+      setRecipe,
       seenTitles,
+      sampleMode,
+      startSample: () => {
+        setSampleMode(true);
+        setPhotos([]);
+        setFridge(SAMPLE_FRIDGE);
+      },
       cameraExplained,
       setCameraExplained,
       prefs,
@@ -79,7 +104,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       mealsThisWeek,
       addMeal: () => setMeals((m) => m + 1),
     }),
-    [photos, recipeIdx, aiRecipe, changeRequest, seenTitles, items, cameraExplained, prefs, prefAskedThisSession, staples, reminder, mealsThisWeek],
+    [photos, fridge, options, recipe, seenTitles, sampleMode, cameraExplained, prefs, prefAskedThisSession, staples, reminder, mealsThisWeek],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -91,4 +116,9 @@ export function useStore() {
   return s;
 }
 
-export { DEFAULT_STAPLES };
+// Sample mode: the 3 built-in recipes as cards (rotated for "something else").
+export function sampleOptions(shift = 0) {
+  return [0, 1, 2].map((k) => sampleRecipe(k + shift));
+}
+
+export { sampleRecipe };

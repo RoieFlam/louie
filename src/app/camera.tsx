@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Mascot, Row, Sheet, Txt } from '@/components/ui';
+import { Mascot, Row, Sheet, Steps, Txt } from '@/components/ui';
 import { HOME_CARDS } from '@/data/mock';
 import { useStore } from '@/state/store';
 import { C, R } from '@/theme';
@@ -84,6 +84,9 @@ export default function Camera() {
       <View style={styles.shadeBottom} pointerEvents="none" />
 
       <SafeAreaView style={styles.overlay} edges={['top', 'bottom']}>
+        <View style={{ paddingTop: 8 }}>
+          <Steps active={0} dark />
+        </View>
         <Row gap={12} style={styles.header}>
           <View style={styles.avatar}>
             <Mascot mood="happy" size={40} />
@@ -138,7 +141,7 @@ export default function Camera() {
           {hasShots ? (
             <Pressable style={[styles.side, styles.sendBtn]} onPress={() => send()} accessibilityRole="button">
               <Txt size={15} weight="semibold" color="#FFFFFF" align="center">
-                מצא מתכון ›
+                המשך ›
               </Txt>
             </Pressable>
           ) : (
@@ -163,7 +166,10 @@ export default function Camera() {
         </Row>
 
         {!hasShots && (
-          <Pressable onPress={() => send([])} accessibilityRole="button" style={{ paddingVertical: 6 }}>
+          <Pressable onPress={() => {
+              s.startSample();
+              router.push('/loading');
+            }} accessibilityRole="button" style={{ paddingVertical: 6 }}>
             <Txt size={12} color="#B9D3E3" align="center" style={{ textDecorationLine: 'underline' }}>
               אין מקרר מול העיניים? נסה דוגמה
             </Txt>

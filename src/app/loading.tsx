@@ -1,17 +1,17 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
 
-import { Button, Mascot, Screen, Txt } from '@/components/ui';
-import { analyzeFridge, AnalyzeError, type AnalyzeResult, type Problem } from '@/lib/analyze';
+import { Button, LouieSays, Mascot, Screen, TopBar, Txt, Wrap } from '@/components/ui';
+import { AnalyzeError, detectItems, type FridgeItem, type Problem } from '@/lib/analyze';
 import { useStore } from '@/state/store';
 import { C } from '@/theme';
 
-// Detection is merged into the loading moment: chips "pop" as items are found,
-// then we go straight to the recipe.
+// Step 1 → 2: Louie reads the photos. Items appear one by one as the model names
+// them (streamed), then we go to the review screen.
 
-const PROBLEM_TEXT: Record<Exclude<Problem, 'none' | 'almost_empty'>, { title: string; body: string }> = {
+const PROBLEM_TEXT: Record<'too_dark' | 'blurry' | 'not_a_fridge', { title: string; body: string }> = {
   too_dark: { title: 'קצת חשוך פה', body: 'תדליק את האור במקרר או תתקרב, ונצלם שוב.' },
   blurry: { title: 'התמונה יצאה מטושטשת', body: 'תחזיק את הטלפון יציב רגע, ונצלם שוב.' },
   not_a_fridge: { title: 'זה לא נראה כמו מקרר', body: 'תפתח את המקרר ותצלם את המדפים.' },
@@ -25,55 +25,48 @@ const ERROR_TEXT: Record<string, string> = {
 export default function Loading() {
   const s = useStore();
   const [found, setFound] = useState<string[]>([]);
-  const [problem, setProblem] = useState<Problem | null>(null);
+  const [problem, setProblem] = useState<Exclude<Problem, 'none' | 'almost_empty'> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const pending = useRef<AnalyzeResult | null>(null);
-  const anims = useRef(Array.from({ length: 12 }, () => new Animated.Value(0))).current;
+  const result = useRef<FridgeItem[] | null>(null);
+  const scan = useRef(new Animated.Value(0)).current;
 
-  function popChips(names: string[], then: () => void) {
-    setFound(names);
-    names.slice(0, 12).forEach((_, i) =>
-      setTimeout(() => Animated.spring(anims[i], { toValue: 1, useNativeDriver: true, friction: 5 }).start(), 150 + i * 180),
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scan, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(scan, { toValue: 0, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
     );
-    setTimeout(then, 150 + Math.min(names.length, 12) * 180 + 900);
-  }
+    loop.start();
+    return () => loop.stop();
+  }, [scan]);
 
-  function goToRecipe() {
-    const r = pending.current;
-    if (r) s.setRecipe(r.recipe, r.items);
-    router.replace('/recipe');
+  function toReview(items: FridgeItem[]) {
+    s.setFridge(items);
+    router.replace('/review');
   }
 
   useEffect(() => {
     let alive = true;
-    if (s.photos.length === 0) {
-      // Sample mode (no real photo): use the built-in sample recipe.
-      popChips(
-        s.items.filter((i) => i.status !== 'missing').map((i) => i.name),
-        () => alive && router.replace('/recipe'),
-      );
+    if (s.sampleMode) {
+      // Sample mode: replay the sample fridge as if it were being detected.
+      const names = s.fridge.map((i) => i.name);
+      const timers = names.map((n, i) => setTimeout(() => alive && setFound((f) => [...f, n]), 400 + i * 220));
+      timers.push(setTimeout(() => alive && router.replace('/review'), 400 + names.length * 220 + 700));
       return () => {
         alive = false;
+        timers.forEach(clearTimeout);
       };
     }
-    analyzeFridge(s.photos, {
-      prefs: s.prefs,
-      changeRequest: s.changeRequest ?? undefined,
-      avoidTitles: s.seenTitles,
-    })
+    detectItems(s.photos, (name) => alive && setFound((f) => [...f, name]))
       .then((r) => {
         if (!alive) return;
-        s.setChangeRequest(null);
-        pending.current = r;
-        if (r.problem !== 'none' && r.problem !== 'almost_empty') {
+        result.current = r.items;
+        if (r.problem === 'too_dark' || r.problem === 'blurry' || r.problem === 'not_a_fridge') {
           setProblem(r.problem);
           return;
         }
-        if (r.problem === 'almost_empty') setProblem('almost_empty');
-        popChips(
-          r.items.filter((i) => i.status !== 'missing').map((i) => i.name),
-          () => alive && r.problem === 'none' && goToRecipe(),
-        );
+        setTimeout(() => alive && toReview(r.items), 600);
       })
       .catch((e) => alive && setError(e instanceof AnalyzeError ? e.code : 'unknown'));
     return () => {
@@ -82,96 +75,89 @@ export default function Loading() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (error || (problem && problem !== 'none')) {
-    const p = problem && problem !== 'almost_empty' && problem !== 'none' ? PROBLEM_TEXT[problem] : null;
-    const empty = problem === 'almost_empty';
+  if (error || problem) {
+    const p = problem ? PROBLEM_TEXT[problem] : null;
     return (
       <Screen>
+        <TopBar step={0} onClose={() => router.dismissTo('/camera')} />
         <View style={styles.center}>
-          <Mascot mood={empty ? 'sad' : 'curious'} size={170} />
-          <Txt size={26} weight="bold" align="center">
-            {empty ? 'המקרר כמעט ריק' : p ? p.title : 'משהו השתבש'}
+          <Mascot mood="curious" size={160} />
+          <Txt size={24} weight="bold" align="center">
+            {p ? p.title : 'משהו השתבש'}
           </Txt>
           <Txt size={16} color={C.muted} align="center">
-            {empty
-              ? 'אבל מצאתי משהו קטן שאפשר להכין. ואולי הגיע הזמן לרשימת קניות?'
-              : p
-                ? p.body
-                : (ERROR_TEXT[error ?? ''] ?? 'לא הצלחתי לקרוא את התמונה. נסה שוב.')}
+            {p ? p.body : (ERROR_TEXT[error ?? ''] ?? 'לא הצלחתי לקרוא את התמונה. נסה שוב.')}
           </Txt>
         </View>
         <View style={styles.actions}>
-          {empty ? (
-            <>
-              <Button label="תראה לי מה אפשר להכין" onPress={goToRecipe} />
-              <Button label="לרשימת הקניות" kind="secondary" onPress={() => router.replace(s.staples ? '/shopping' : '/staples')} />
-            </>
-          ) : (
-            <>
-              <Button label="צלם שוב" onPress={() => router.dismissTo('/camera')} />
-              {pending.current && <Button label="תראה בכל זאת מתכון" kind="secondary" onPress={goToRecipe} />}
-            </>
+          <Button label="צלם שוב" onPress={() => router.dismissTo('/camera')} />
+          {!!result.current?.length && (
+            <Button label="תראה מה מצאת בכל זאת" kind="secondary" onPress={() => toReview(result.current ?? [])} />
           )}
         </View>
       </Screen>
     );
   }
 
+  const translateY = scan.interpolate({ inputRange: [0, 1], outputRange: [0, 196] });
+
   return (
-    <Screen bg={C.night}>
-      <View style={styles.photo}>
-        {s.photos[0] ? (
-          <Image source={{ uri: s.photos[0] }} style={StyleSheet.absoluteFill} contentFit="cover" />
-        ) : (
-          <View style={[StyleSheet.absoluteFill, styles.samplePhoto]}>
-            <View style={styles.shelf} />
-          </View>
-        )}
-        {s.photos.length > 1 && (
-          <View style={styles.more}>
-            <Txt size={13} weight="semibold" align="center">{`+${s.photos.length - 1}`}</Txt>
-          </View>
-        )}
-      </View>
-      <View style={styles.found}>
-        {found.slice(0, 12).map((name, i) => (
-          <Animated.View key={name} style={[styles.pill, { opacity: anims[i] ?? 1, transform: [{ scale: anims[i] ?? 1 }] }]}>
-            <Txt size={14} weight="semibold" align="center">
-              {name}
-            </Txt>
-          </Animated.View>
-        ))}
-      </View>
-      <View style={styles.bottom}>
-        <Txt size={22} weight="bold" color={C.onAccent} align="center">
-          Louie מסתכל במקרר…
-        </Txt>
-        <Txt size={15} color="#CFE3EF" align="center">
-          {found.length === 0 ? 'רגע, מסתכל על כל המדפים…' : `מצאתי ${found.length} דברים טובים`}
-        </Txt>
-        <Mascot mood="curious" size={130} />
+    <Screen>
+      <TopBar step={0} />
+      <View style={styles.body}>
+        <LouieSays mood="curious">
+          {found.length === 0 ? 'רגע, עובר מדף מדף…' : `כבר מצאתי ${found.length}. ממשיך לחפש…`}
+        </LouieSays>
+
+        <View style={styles.photo}>
+          {s.photos[0] ? (
+            <Image source={{ uri: s.photos[0] }} style={StyleSheet.absoluteFill} contentFit="cover" />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, styles.samplePhoto]}>
+              <Txt size={64} align="center">
+                🧊
+              </Txt>
+            </View>
+          )}
+          <Animated.View style={[styles.scanLine, { transform: [{ translateY }] }]} />
+          {s.photos.length > 1 && (
+            <View style={styles.more}>
+              <Txt size={13} weight="semibold" align="center">{`+${s.photos.length - 1} תמונות`}</Txt>
+            </View>
+          )}
+        </View>
+
+        <Wrap style={{ justifyContent: 'center' }}>
+          {found.map((name) => (
+            <Pop key={name} label={name} />
+          ))}
+        </Wrap>
       </View>
     </Screen>
   );
 }
 
+function Pop({ label }: { label: string }) {
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(a, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
+  }, [a]);
+  return (
+    <Animated.View style={[styles.pill, { opacity: a, transform: [{ scale: a }] }]}>
+      <Txt size={14} weight="medium" align="center">
+        {label}
+      </Txt>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
-  photo: { flex: 1, maxHeight: 380, marginHorizontal: 24, marginTop: 24, borderRadius: 28, overflow: 'hidden', backgroundColor: '#DCEAF2' },
-  samplePhoto: { backgroundColor: '#E4EFF5' },
-  shelf: { position: 'absolute', top: '52%', left: 0, right: 0, height: 3, backgroundColor: '#FFFFFF' },
-  found: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'center', gap: 8, paddingHorizontal: 24, paddingTop: 16, minHeight: 40 },
-  more: { position: 'absolute', bottom: 12, left: 12, backgroundColor: '#FFFFFF', borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },
-  pill: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-  },
-  bottom: { alignItems: 'center', gap: 6, paddingTop: 24, paddingBottom: 8 },
+  body: { flex: 1, paddingHorizontal: 20, paddingTop: 8, gap: 16 },
+  photo: { height: 200, borderRadius: 20, overflow: 'hidden', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line },
+  samplePhoto: { backgroundColor: C.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  scanLine: { position: 'absolute', left: 0, right: 0, top: 0, height: 4, backgroundColor: C.skyLight, opacity: 0.9 },
+  more: { position: 'absolute', bottom: 10, left: 10, backgroundColor: C.surface, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 10 },
+  pill: { backgroundColor: C.surface, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14, borderWidth: 1, borderColor: C.line },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 24 },
   actions: { paddingHorizontal: 24, paddingBottom: 16, gap: 12 },
 });

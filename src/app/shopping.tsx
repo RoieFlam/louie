@@ -3,17 +3,17 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Button, Row, Screen, Txt } from '@/components/ui';
-import { IN_FRIDGE_NOW } from '@/data/mock';
 import { useStore } from '@/state/store';
 import { C, R } from '@/theme';
 
 export default function Shopping() {
   const s = useStore();
   const missing = useMemo(() => {
-    const fromStaples = (s.staples ?? []).filter((x) => !IN_FRIDGE_NOW.includes(x));
-    const fromRecipe = s.items.filter((i) => i.status === 'missing').map((i) => i.name);
-    return Array.from(new Set([...fromStaples, ...fromRecipe]));
-  }, [s.staples, s.items]);
+    const have = new Set(s.fridge.map((i) => i.name));
+    const fromStaples = (s.staples ?? []).filter((x) => !have.has(x));
+    const fromRecipe = (s.recipe?.missing ?? []).filter((m) => !m.optional).map((m) => m.name);
+    return Array.from(new Set([...fromRecipe, ...fromStaples]));
+  }, [s.staples, s.fridge, s.recipe]);
   const [checked, setChecked] = useState<string[]>([]);
   const toggle = (x: string) => setChecked(checked.includes(x) ? checked.filter((c) => c !== x) : [...checked, x]);
 
@@ -31,7 +31,7 @@ export default function Shopping() {
           </Pressable>
         </Row>
         <Txt size={15} color={C.muted}>
-          {`לפי התמונה האחרונה חסרים ${missing.length} דברים`}
+          {s.fridge.length ? `לפי המקרר שלך חסרים ${missing.length} דברים` : 'עוד לא צילמת את המקרר, אז זו רשימת הבסיס שלך'}
         </Txt>
         <View style={styles.list}>
           {missing.map((x) => {
