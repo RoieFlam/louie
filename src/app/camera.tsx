@@ -7,7 +7,6 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Mascot, Row, Sheet, Steps, Txt } from '@/components/ui';
-import { HOME_CARDS } from '@/data/mock';
 import { useStore } from '@/state/store';
 import { C, R } from '@/theme';
 
@@ -27,17 +26,12 @@ export default function Camera() {
   const [perm, requestPerm] = useCameraPermissions();
   const [shots, setShots] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [card, setCard] = useState(0);
   const [askPermission, setAskPermission] = useState(false);
 
   useEffect(() => {
     if (perm && !perm.granted && !s.cameraExplained) setAskPermission(true);
   }, [perm, s.cameraExplained]);
 
-  useEffect(() => {
-    const t = setInterval(() => setCard((c) => (c + 1) % HOME_CARDS.length), 5000);
-    return () => clearInterval(t);
-  }, []);
 
   async function shoot() {
     if (!perm?.granted) {
@@ -70,7 +64,11 @@ export default function Camera() {
     router.push('/loading');
   }
 
-  const c = HOME_CARDS[card];
+  const t = s.totals;
+  const c =
+    t.meals > 0
+      ? { icon: '🛟', title: t.rescued > 0 ? `הצלת ${t.rescued} מצרכים · כ-₪${t.saved}` : `בישלת ${t.meals} ארוחות מהמקרר`, sub: 'יש משהו שעומד להיגמר? צלם ונציל אותו.' }
+      : { icon: '🛟', title: 'צלם את המקרר, ואמצא מה להציל', sub: 'מה שעומד להיגמר נכנס למתכון קודם.' };
   const hasShots = shots.length > 0;
 
   return (
@@ -104,9 +102,9 @@ export default function Camera() {
         <View style={{ flex: 1 }} />
 
         {!hasShots && (
-          <Pressable style={styles.card} onPress={() => setCard((card + 1) % HOME_CARDS.length)}>
+          <View style={styles.card}>
             <Row gap={10}>
-              <Txt size={18} weight="bold" color={C.warn} align="center" style={{ width: 22 }}>
+              <Txt size={18} weight="bold" color={C.fresh} align="center" style={{ width: 24 }}>
                 {c.icon}
               </Txt>
               <View style={{ flex: 1 }}>
@@ -118,7 +116,7 @@ export default function Camera() {
                 </Txt>
               </View>
             </Row>
-          </Pressable>
+          </View>
         )}
 
         {hasShots && (

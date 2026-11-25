@@ -1,6 +1,8 @@
 import { Image } from 'expo-image';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import {
+  Animated,
+  Easing,
   Modal,
   Pressable,
   StyleSheet,
@@ -255,10 +257,43 @@ export function TopBar({ step, onClose, dark }: { step: 0 | 1 | 2; onClose?: () 
 }
 
 // Louie as a guide: one short line per screen, always in the same place and shape.
-export function LouieSays({ mood = 'happy', children }: { mood?: keyof typeof mascots; children: ReactNode }) {
+// He "breathes" gently, and hops whenever `hop` changes (a rescue, a pick...).
+export function LouieSays({ mood = 'happy', hop, children }: { mood?: keyof typeof mascots; hop?: unknown; children: ReactNode }) {
+  const breath = useRef(new Animated.Value(0)).current;
+  const jump = useRef(new Animated.Value(0)).current;
+  const first = useRef(true);
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(breath, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(breath, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [breath]);
+
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    jump.setValue(0);
+    Animated.sequence([
+      Animated.timing(jump, { toValue: 1, duration: 140, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.spring(jump, { toValue: 0, friction: 4, useNativeDriver: true }),
+    ]).start();
+  }, [hop, jump]);
+
+  const scale = breath.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] });
+  const translateY = jump.interpolate({ inputRange: [0, 1], outputRange: [0, -14] });
+
   return (
     <Row gap={10} style={{ alignItems: 'flex-end' }}>
-      <Mascot mood={mood} size={52} />
+      <Animated.View style={{ transform: [{ translateY }, { scale }] }}>
+        <Mascot mood={mood} size={52} />
+      </Animated.View>
       <View style={styles.bubble}>
         <Txt size={15} weight="medium">
           {children}

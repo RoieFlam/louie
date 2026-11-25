@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Button, Row, Screen, Txt } from '@/components/ui';
+import { rescueOf } from '@/lib/rescue';
 import { useStore } from '@/state/store';
 import { C } from '@/theme';
 
@@ -30,6 +31,10 @@ export default function Cook() {
   }, [running]);
 
   const last = i === steps.length - 1;
+  function finish() {
+    const r = rescueOf(s.recipe, s.fridge);
+    s.addCooked(r.names, r.value);
+  }
   const total = step.timerSec ?? 0;
 
   return (
@@ -97,7 +102,7 @@ export default function Cook() {
         <Button
           label={last ? 'סיימתי!' : 'השלב הבא'}
           style={{ flex: 1 }}
-          onPress={() => (last ? (s.addMeal(), router.replace('/cooked')) : setI(i + 1))}
+          onPress={() => (last ? (finish(), router.replace('/cooked')) : setI(i + 1))}
         />
         <Button label="הקודם" kind="secondary" style={{ width: 120 }} disabled={i === 0} onPress={() => setI(i - 1)} />
       </Row>

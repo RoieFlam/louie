@@ -1,10 +1,12 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Button, Card, Chip, LouieSays, Row, Screen, Sheet, TopBar, Txt, Wrap } from '@/components/ui';
 import { PREF_QUESTIONS, REASONS } from '@/data/mock';
-import { suggestRecipes } from '@/lib/analyze';
+import { suggestRecipes, type SuggestedRecipe } from '@/lib/analyze';
+import { bump, tap } from '@/lib/haptics';
+import { rescueOf } from '@/lib/rescue';
 import { sampleOptions, useStore } from '@/state/store';
 import { C, R } from '@/theme';
 
@@ -58,35 +60,31 @@ export default function RecipeScreen() {
   }
 
   const expiring = new Set(s.fridge.filter((i) => i.expiring).map((i) => i.name));
+  const rescue = rescueOf(r, s.fridge);
 
   return (
     <Screen>
       <TopBar step={2} onClose={() => router.dismissTo('/camera')} />
       <ScrollView contentContainerStyle={styles.content}>
-        <LouieSays>{busy ? 'מחפש לך 3 רעיונות חדשים…' : 'יש לי 3 רעיונות ממה שיש לך. מה בא לך?'}</LouieSays>
+        <LouieSays hop={sel}>
+          {busy ? 'מחפש לך 3 רעיונות חדשים…' : expiring.size > 0 ? 'יש לי 3 רעיונות. 🛟 מסמן את אלה שמצילים משהו.' : 'יש לי 3 רעיונות ממה שיש לך. מה בא לך?'}
+        </LouieSays>
 
         <Row gap={8} style={{ alignItems: 'stretch' }}>
-          {s.options.map((o, k) => {
-            const on = k === sel;
-            return (
-              <Pressable
-                key={o.id}
-                onPress={() => setSel(k)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                style={[styles.option, on && styles.optionOn, busy && { opacity: 0.4 }]}>
-                <Txt size={30} align="center" style={{ lineHeight: 38 }}>
-                  {o.emoji}
-                </Txt>
-                <Txt size={13} weight="semibold" align="center" numberOfLines={2} color={on ? C.accent : C.ink}>
-                  {o.title}
-                </Txt>
-                <Txt size={11} color={C.muted} align="center">
-                  {`${o.minutes} דק׳`}
-                </Txt>
-              </Pressable>
-            );
-          })}
+          {s.options.map((o, k) => (
+            <OptionCard
+              key={o.id}
+              o={o}
+              index={k}
+              on={k === sel}
+              dim={busy}
+              saves={rescueOf(o, s.fridge).names.length}
+              onPress={() => {
+                tap();
+                setSel(k);
+              }}
+            />
+          ))}
         </Row>
 
         {busy ? (
@@ -107,6 +105,14 @@ export default function RecipeScreen() {
                 </View>
               ))}
             </Row>
+
+            {rescue.names.length > 0 && (
+              <View style={styles.rescue}>
+                <Txt size={14} weight="semibold" color={C.fresh}>
+                  {`🛟 מציל: ${rescue.names.join(', ')} · כ-₪${rescue.value}`}
+                </Txt>
+              </View>
+            )}
 
             <Row style={{ justifyContent: 'space-between' }}>
               <Txt size={16} weight="semibold">
@@ -215,10 +221,49 @@ export default function RecipeScreen() {
   );
 }
 
+// Cards flip in one after another (under a second in total), like opening a pack.
+function OptionCard({ o, index, on, dim, saves, onPress }: { o: SuggestedRecipe; index: number; on: boolean; dim: boolean; saves: number; onPress: () => void }) {
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(a, { toValue: 1, duration: 320, delay: index * 130, easing: Easing.out(Easing.back(1.4)), useNativeDriver: true }).start(
+      ({ finished }) => finished && bump(),
+    );
+  }, [a, index]);
+  const rotateY = a.interpolate({ inputRange: [0, 1], outputRange: ['90deg', '0deg'] });
+  const scale = a.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] });
+  return (
+    <Animated.View style={{ flex: 1, opacity: a, transform: [{ perspective: 600 }, { rotateY }, { scale }] }}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityState={{ selected: on }}
+        style={[styles.option, on && styles.optionOn, dim && { opacity: 0.4 }]}>
+        {saves > 0 && (
+          <View style={styles.saveBadge}>
+            <Txt size={11} weight="bold" color={C.onAccent} align="center">{`🛟 ${saves}`}</Txt>
+          </View>
+        )}
+        <Txt size={30} align="center" style={{ lineHeight: 38 }}>
+          {o.emoji}
+        </Txt>
+        <Txt size={13} weight="semibold" align="center" numberOfLines={2} color={on ? C.accent : C.ink}>
+          {o.title}
+        </Txt>
+        <Txt size={11} color={C.muted} align="center">
+          {`${o.minutes} דק׳`}
+        </Txt>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
+  saveBadge: { position: 'absolute', top: -8, left: -6, backgroundColor: C.fresh, borderRadius: 999, paddingVertical: 2, paddingHorizontal: 7, zIndex: 1 },
+  rescue: { alignSelf: 'flex-end', backgroundColor: C.freshSoft, borderRadius: R.chip, paddingVertical: 6, paddingHorizontal: 12 },
   content: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 24, gap: 14 },
   option: {
     flex: 1,
+    overflow: 'visible',
     backgroundColor: C.surface,
     borderRadius: R.card,
     paddingVertical: 12,

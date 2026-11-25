@@ -1,4 +1,5 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { RECIPES } from '@/data/mock';
 import type { FridgeItem, SuggestedRecipe } from '@/lib/analyze';
@@ -26,9 +27,13 @@ type Store = {
   setStaples: (s: string[]) => void;
   reminder: { time: string; weekly: boolean } | null;
   setReminder: (r: { time: string; weekly: boolean } | null) => void;
-  mealsThisWeek: number;
-  addMeal: () => void;
+  totals: Totals; // only ever goes up, saved on the phone
+  lastCook: { rescued: string[]; value: number } | null;
+  addCooked: (rescued: string[], value: number) => void;
 };
+
+type Totals = { meals: number; rescued: number; saved: number };
+const TOTALS_KEY = 'louie.totals.v1';
 
 const Ctx = createContext<Store | null>(null);
 
@@ -66,7 +71,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [prefAskedThisSession, setPrefAskedThisSession] = useState(false);
   const [staples, setStaples] = useState<string[] | null>(null);
   const [reminder, setReminder] = useState<Store['reminder']>(null);
-  const [mealsThisWeek, setMeals] = useState(1);
+  const [totals, setTotals] = useState<Totals>({ meals: 0, rescued: 0, saved: 0 });
+  const [lastCook, setLastCook] = useState<Store['lastCook']>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(TOTALS_KEY)
+      .then((v) => v && setTotals(JSON.parse(v)))
+      .catch(() => {});
+  }, []);
 
   const value = useMemo<Store>(
     () => ({
@@ -101,10 +113,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setStaples,
       reminder,
       setReminder,
-      mealsThisWeek,
-      addMeal: () => setMeals((m) => m + 1),
+      totals,
+      lastCook,
+      addCooked: (rescued, value) => {
+        setLastCook({ rescued, value });
+        setTotals((t) => {
+          const n = { meals: t.meals + 1, rescued: t.rescued + rescued.length, saved: t.saved + value };
+          AsyncStorage.setItem(TOTALS_KEY, JSON.stringify(n)).catch(() => {});
+          return n;
+        });
+        // Rescued items are used up: no longer "running out".
+        setFridge((f) => f.map((i) => (rescued.includes(i.name) ? { ...i, expiring: false } : i)));
+      },
     }),
-    [photos, fridge, options, recipe, seenTitles, sampleMode, cameraExplained, prefs, prefAskedThisSession, staples, reminder, mealsThisWeek],
+    [photos, fridge, options, recipe, seenTitles, sampleMode, cameraExplained, prefs, prefAskedThisSession, staples, reminder, totals, lastCook],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

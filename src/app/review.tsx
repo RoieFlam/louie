@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Card, LouieSays, Row, Screen, TopBar, Txt } from '@/components/ui';
 import { AnalyzeError, suggestRecipes } from '@/lib/analyze';
+import { tap } from '@/lib/haptics';
 import { sampleOptions, useStore } from '@/state/store';
 import { C, F, R } from '@/theme';
 
@@ -23,6 +24,7 @@ export default function Review() {
     s.setFridge(items.filter((i) => i.name !== name));
   }
   function toggle(name: string) {
+    tap();
     s.setFridge(items.map((i) => (i.name === name ? { ...i, expiring: !i.expiring } : i)));
   }
   function add() {
@@ -52,6 +54,7 @@ export default function Review() {
   }
 
   const few = items.length < 4;
+  const atRisk = items.filter((i) => i.expiring).length;
 
   return (
     <Screen>
@@ -60,10 +63,12 @@ export default function Review() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         stickyHeaderIndices={s.photos.length ? [1] : undefined}>
-        <LouieSays mood={few ? 'sad' : 'happy'}>
+        <LouieSays mood={few ? 'sad' : atRisk > 0 ? 'happy' : 'curious'} hop={atRisk}>
           {few
             ? 'המקרר די ריק. תוסיף מה שיש בארון ואמצא משהו.'
-            : `מצאתי ${items.length} דברים. משהו לא נכון? ✕ מוחק אותו.`}
+            : atRisk > 0
+              ? `מצאתי ${items.length} דברים, ו-${atRisk} מהם עומדים להיגמר. בוא נציל אותם 🛟`
+              : `מצאתי ${items.length} דברים. משהו עומד להיגמר? סמן אותו ואציל אותו קודם.`}
         </LouieSays>
 
         {s.photos.length > 0 && (
@@ -124,7 +129,7 @@ export default function Review() {
           ))}
         </Card>
         <Txt size={13} color={C.muted} align="center">
-          לחיצה על "טרי" מסמנת מה צריך לגמור קודם. Louie יעדיף אותו.
+          ✕ מוחק מצרך. לחיצה על "טרי" מסמנת שהוא עומד להיגמר, ו-Louie ינסה להציל אותו.
         </Txt>
       </ScrollView>
 
