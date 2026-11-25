@@ -1,6 +1,7 @@
 // Louie server function. Two modes, so photos are sent to Claude only once:
 //   mode "inventory": fridge photo(s) -> list of items + problem flag (vision, strong model)
-//   mode "recipe":    confirmed item list (text) -> one recipe (cheap, fast model)
+//   mode "recipe":    confirmed item list (text) -> 3 recipes in one call (cheap model)
+// Inventory streams the model text so the app shows items as they are found; final JSON follows a DONE marker.
 // The Anthropic key is read from the ANTHROPIC_API_KEY secret. It never reaches the app.
 import Anthropic from "npm:@anthropic-ai/sdk@1.7.0";
 
@@ -158,7 +159,7 @@ async function inventory(client: Anthropic, body: Body) {
   } as Anthropic.MessageCreateParamsStreaming;
 
   const enc = new TextEncoder();
-  const body = new ReadableStream({
+  const out = new ReadableStream({
     async start(ctrl) {
       let final: unknown;
       try {
@@ -178,7 +179,7 @@ async function inventory(client: Anthropic, body: Body) {
       ctrl.close();
     },
   });
-  return new Response(body, { headers: { ...cors, "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache" } });
+  return new Response(out, { headers: { ...cors, "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-cache" } });
 }
 
 const DONE = "\n@@DONE@@";
