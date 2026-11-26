@@ -3,9 +3,18 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 import { RECIPES } from '@/data/mock';
 import type { FridgeItem, SuggestedRecipe } from '@/lib/analyze';
+import { mergeKitchen, removeFromKitchen, same, type KitchenItem } from '@/lib/kitchen';
 
 // In-memory app state for the pilot. Later: Supabase (per user) + local cache.
 type Store = {
+  hydrated: boolean; // saved state has been read from the phone
+  kitchen: KitchenItem[]; // everything at home (fridge, pantry, freezer), saved on the phone
+  kitchenReady: boolean; // first-run setup done
+  setKitchen: (k: KitchenItem[]) => void;
+  finishSetup: (k: KitchenItem[]) => void;
+  addToKitchen: (items: KitchenItem[]) => void;
+  removeFromKitchen: (names: string[]) => void;
+  toggleExpiring: (name: string) => void;
   photos: string[];
   setPhotos: (u: string[]) => void;
   fridge: FridgeItem[]; // what Louie saw, after the user's edits
@@ -34,6 +43,7 @@ type Store = {
 
 type Totals = { meals: number; rescued: number; saved: number };
 const TOTALS_KEY = 'louie.totals.v1';
+const KITCHEN_KEY = 'louie.kitchen.v1';
 
 const Ctx = createContext<Store | null>(null);
 
@@ -73,15 +83,46 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [reminder, setReminder] = useState<Store['reminder']>(null);
   const [totals, setTotals] = useState<Totals>({ meals: 0, rescued: 0, saved: 0 });
   const [lastCook, setLastCook] = useState<Store['lastCook']>(null);
+  const [kitchen, setKitchenState] = useState<KitchenItem[]>([]);
+  const [kitchenReady, setKitchenReady] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(TOTALS_KEY)
-      .then((v) => v && setTotals(JSON.parse(v)))
-      .catch(() => {});
+    Promise.all([
+      AsyncStorage.getItem(TOTALS_KEY)
+        .then((v) => v && setTotals(JSON.parse(v)))
+        .catch(() => {}),
+      AsyncStorage.getItem(KITCHEN_KEY)
+        .then((v) => {
+          if (!v) return;
+          const saved = JSON.parse(v) as { ready: boolean; items: KitchenItem[]; staples?: string[] | null };
+          setKitchenState(saved.items ?? []);
+          setKitchenReady(!!saved.ready);
+          if (saved.staples) setStaples(saved.staples);
+        })
+        .catch(() => {}),
+    ]).finally(() => setHydrated(true));
   }, []);
+
+  // Every kitchen change is saved right away (the lists are small).
+  useEffect(() => {
+    if (!hydrated) return;
+    AsyncStorage.setItem(KITCHEN_KEY, JSON.stringify({ ready: kitchenReady, items: kitchen, staples })).catch(() => {});
+  }, [kitchen, kitchenReady, staples, hydrated]);
 
   const value = useMemo<Store>(
     () => ({
+      hydrated,
+      kitchen,
+      kitchenReady,
+      setKitchen: setKitchenState,
+      finishSetup: (k) => {
+        setKitchenState(k);
+        setKitchenReady(true);
+      },
+      addToKitchen: (items) => setKitchenState((k) => mergeKitchen(k, items)),
+      removeFromKitchen: (names) => setKitchenState((k) => removeFromKitchen(k, names)),
+      toggleExpiring: (name) => setKitchenState((k) => k.map((i) => (i.name === name ? { ...i, expiring: !i.expiring } : i))),
       photos,
       setPhotos: (p) => {
         setSampleMode(false);
@@ -124,9 +165,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         });
         // Rescued items are used up: no longer "running out".
         setFridge((f) => f.map((i) => (rescued.includes(i.name) ? { ...i, expiring: false } : i)));
+        setKitchenState((k) => k.map((i) => (rescued.some((r) => same(r, i.name)) ? { ...i, expiring: false } : i)));
       },
     }),
-    [photos, fridge, options, recipe, seenTitles, sampleMode, cameraExplained, prefs, prefAskedThisSession, staples, reminder, totals, lastCook],
+    [hydrated, kitchen, kitchenReady, photos, fridge, options, recipe, seenTitles, sampleMode, cameraExplained, prefs, prefAskedThisSession, staples, reminder, totals, lastCook],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

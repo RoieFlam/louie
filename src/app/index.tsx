@@ -1,10 +1,15 @@
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { Button, Mascot, Screen, Txt } from '@/components/ui';
+import { useStore } from '@/state/store';
 import { C, F } from '@/theme';
 
+// First visit: a short welcome, then setting up the kitchen. After that, straight to the kitchen.
 export default function Splash() {
+  const s = useStore();
+  if (!s.hydrated) return <Screen>{null}</Screen>;
+  if (s.kitchenReady) return <Redirect href="/home" />;
   return (
     <Screen>
       <View style={styles.center}>
@@ -14,14 +19,14 @@ export default function Splash() {
           Louie
         </Txt>
         <Txt size={17} color={C.muted} align="center">
-          צלם את המקרר. אני אחליט מה אוכלים.
+          ספרו לי מה יש בבית, ואני אחליט מה אוכלים.
         </Txt>
       </View>
       <View style={styles.bottom}>
         <Txt size={13} color={C.muted} align="center">
-          בלי הרשמה. הצילום הראשון עכשיו.
+          בלי הרשמה. חצי דקה ויש מתכון.
         </Txt>
-        <Button label="פותחים את המצלמה" onPress={() => router.push('/camera')} />
+        <Button label="מתחילים" onPress={() => router.push('/setup')} />
       </View>
     </Screen>
   );

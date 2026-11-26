@@ -41,7 +41,7 @@ export default function RecipeScreen() {
       s.setOptions(opts);
       setSel(0);
     } catch {
-      setError('לא הצלחתי למצוא רעיונות אחרים. נסה שוב.');
+      setError('לא הצלחתי למצוא רעיונות אחרים. ננסה שוב?');
     } finally {
       setBusy(false);
       setReason(null);
@@ -51,9 +51,9 @@ export default function RecipeScreen() {
   if (!r) {
     return (
       <Screen>
-        <TopBar step={2} onClose={() => router.dismissTo('/camera')} />
+        <TopBar onClose={() => router.dismissTo('/home')} />
         <View style={{ padding: 24 }}>
-          <Button label="חזרה למצלמה" onPress={() => router.dismissTo('/camera')} />
+          <Button label="חזרה למטבח" onPress={() => router.dismissTo('/home')} />
         </View>
       </Screen>
     );
@@ -64,7 +64,7 @@ export default function RecipeScreen() {
 
   return (
     <Screen>
-      <TopBar step={2} onClose={() => router.dismissTo('/camera')} />
+      <TopBar onClose={() => router.dismissTo('/home')} />
       <ScrollView contentContainerStyle={styles.content}>
         <LouieSays hop={sel}>
           {busy ? 'מחפש לך 3 רעיונות חדשים…' : expiring.size > 0 ? 'יש לי 3 רעיונות. 🛟 מסמן את אלה שמצילים משהו.' : 'יש לי 3 רעיונות ממה שיש לך. מה בא לך?'}
@@ -120,7 +120,7 @@ export default function RecipeScreen() {
               </Txt>
               <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={8}>
                 <Txt size={13} weight="medium" color={C.accent}>
-                  לתקן את מה שיש לי ›
+                  לעדכן את המטבח ›
                 </Txt>
               </Pressable>
             </Row>
@@ -209,7 +209,7 @@ export default function RecipeScreen() {
         onClose={() => setOther(false)}
         title="מה לשנות?"
         body="אפשר לבחור, אפשר גם סתם. אמצא 3 רעיונות חדשים ממה שיש לך."
-        primary={{ label: 'תן לי 3 אחרים', onPress: more }}
+        primary={{ label: 'עוד 3 רעיונות', onPress: more }}
         secondary={{ label: 'בעצם זה טוב', onPress: () => setOther(false) }}>
         <Wrap style={{ justifyContent: 'center' }}>
           {REASONS.map((x) => (

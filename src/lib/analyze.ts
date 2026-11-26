@@ -144,3 +144,19 @@ export async function suggestRecipes(
     steps: x.steps.map((s) => ({ text: s.text, tip: s.tip || undefined, timerSec: s.timer_sec > 0 ? s.timer_sec : undefined })),
   }));
 }
+
+// The Louie bar, for sentences the phone can't parse by itself ("קניתי חלב ונגמרו הביצים",
+// "בא לי משהו חריף"). Text only, on Haiku: a fraction of an agora per sentence.
+export type ParsedSentence = {
+  add: { name: string; place: 'fridge' | 'pantry' | 'freezer' }[];
+  remove: string[];
+  request: string | null;
+};
+
+export async function parseSentence(text: string, kitchen: string[]): Promise<ParsedSentence> {
+  const r = await call<{ add: ParsedSentence['add']; remove: string[]; request: string }>(
+    { mode: 'parse', text, kitchen: kitchen.slice(0, 120) },
+    20_000,
+  );
+  return { add: r.add ?? [], remove: r.remove ?? [], request: r.request?.trim() ? r.request.trim() : null };
+}

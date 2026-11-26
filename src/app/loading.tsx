@@ -12,14 +12,14 @@ import { C } from '@/theme';
 // them (streamed), then we go to the review screen.
 
 const PROBLEM_TEXT: Record<'too_dark' | 'blurry' | 'not_a_fridge', { title: string; body: string }> = {
-  too_dark: { title: 'קצת חשוך פה', body: 'תדליק את האור במקרר או תתקרב, ונצלם שוב.' },
-  blurry: { title: 'התמונה יצאה מטושטשת', body: 'תחזיק את הטלפון יציב רגע, ונצלם שוב.' },
-  not_a_fridge: { title: 'זה לא נראה כמו מקרר', body: 'תפתח את המקרר ותצלם את המדפים.' },
+  too_dark: { title: 'קצת חשוך פה', body: 'עם עוד קצת אור, או קצת יותר קרוב, אראה הכל. ננסה שוב?' },
+  blurry: { title: 'התמונה יצאה מטושטשת', body: 'רגע של יד יציבה, ונצלם שוב.' },
+  not_a_fridge: { title: 'זה לא נראה כמו מקרר', body: 'פותחים את המקרר ומצלמים את המדפים.' },
 };
 
 const ERROR_TEXT: Record<string, string> = {
-  network: 'אין חיבור לאינטרנט. נסה שוב בעוד רגע.',
-  busy: 'יש עומס כרגע. נסה שוב בעוד דקה.',
+  network: 'אין חיבור לאינטרנט. ננסה שוב בעוד רגע?',
+  busy: 'יש עומס כרגע. ננסה שוב בעוד דקה?',
 };
 
 export default function Loading() {
@@ -79,20 +79,20 @@ export default function Loading() {
     const p = problem ? PROBLEM_TEXT[problem] : null;
     return (
       <Screen>
-        <TopBar step={0} onClose={() => router.dismissTo('/camera')} />
+        <TopBar step={0} onClose={() => router.dismissTo('/home')} />
         <View style={styles.center}>
           <Mascot mood="curious" size={160} />
           <Txt size={24} weight="bold" align="center">
             {p ? p.title : 'משהו השתבש'}
           </Txt>
           <Txt size={16} color={C.muted} align="center">
-            {p ? p.body : (ERROR_TEXT[error ?? ''] ?? 'לא הצלחתי לקרוא את התמונה. נסה שוב.')}
+            {p ? p.body : (ERROR_TEXT[error ?? ''] ?? 'לא הצלחתי לקרוא את התמונה. ננסה שוב?')}
           </Txt>
         </View>
         <View style={styles.actions}>
-          <Button label="צלם שוב" onPress={() => router.dismissTo('/camera')} />
+          <Button label="לצלם שוב" onPress={() => router.dismissTo('/camera')} />
           {!!result.current?.length && (
-            <Button label="תראה מה מצאת בכל זאת" kind="secondary" onPress={() => toReview(result.current ?? [])} />
+            <Button label="להראות מה מצאת בכל זאת" kind="secondary" onPress={() => toReview(result.current ?? [])} />
           )}
         </View>
       </Screen>

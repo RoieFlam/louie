@@ -85,7 +85,7 @@ export default function Cook() {
             <Button
               kind="secondary"
               height={46}
-              label={running ? 'עצור טיימר' : left === total ? 'הפעל טיימר' : left === 0 ? 'שוב מההתחלה' : 'המשך טיימר'}
+              label={running ? 'לעצור טיימר' : left === total ? 'להפעיל טיימר' : left === 0 ? 'שוב מההתחלה' : 'להמשיך טיימר'}
               onPress={() => {
                 if (left === 0) setLeft(total);
                 setRunning(!running || left === 0);

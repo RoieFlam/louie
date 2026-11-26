@@ -50,7 +50,7 @@ export default function Staples() {
           {!!text.trim() && (
             <Pressable onPress={add} style={styles.addBtn} accessibilityRole="button">
               <Txt size={14} weight="semibold" color={C.onAccent} align="center">
-                הוסף
+                הוספה
               </Txt>
             </Pressable>
           )}
@@ -58,7 +58,7 @@ export default function Staples() {
       </ScrollView>
       <View style={styles.bottom}>
         <Button
-          label={`בנה לי רשימה · ${picked.length} נבחרו`}
+          label={`לבנות רשימה · ${picked.length} נבחרו`}
           disabled={picked.length === 0}
           onPress={() => {
             s.setStaples(picked);

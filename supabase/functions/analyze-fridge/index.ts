@@ -1,12 +1,14 @@
-// Louie server function. Two modes, so photos are sent to Claude only once:
+// Louie server function. Three modes, so photos are sent to Claude only once:
 //   mode "inventory": fridge photo(s) -> list of items + problem flag (vision, strong model)
 //   mode "recipe":    confirmed item list (text) -> 3 recipes in one call (cheap model)
+//   mode "parse":     one sentence from the Louie bar -> items to add/remove + a recipe request (cheapest model)
 // Inventory streams the model text so the app shows items as they are found; final JSON follows a DONE marker.
 // The Anthropic key is read from the ANTHROPIC_API_KEY secret. It never reaches the app.
 import Anthropic from "npm:@anthropic-ai/sdk@1.7.0";
 
 const VISION_MODEL = "claude-opus-5-5"; // best at reading packed shelves and Hebrew labels
 const RECIPE_MODEL = "claude-sonnet-5-5"; // text only, ~5x cheaper per call
+const PARSE_MODEL = "claude-haiku-5-5"; // one short sentence -> JSON, a fraction of an agora
 const MAX_IMAGES = 3;
 const MAX_IMAGE_B64 = 6_600_000; // ~5MB decoded, the API limit
 
@@ -92,6 +94,31 @@ const RECIPE_SYSTEM = `You are Louie, a cooking buddy for students in Israel. Gi
 - emoji: one food emoji that matches the dish.
 - Follow preferences and the change request strictly (e.g. vegetarian = no meat or fish).`;
 
+const PARSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["add", "remove", "request"],
+  properties: {
+    add: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "place"],
+        properties: { name: { type: "string" }, place: { type: "string", enum: ["fridge", "pantry", "freezer"] } },
+      },
+    },
+    remove: { type: "array", items: { type: "string" } },
+    request: { type: "string" },
+  },
+};
+
+const PARSE_SYSTEM = `You read one short message a user typed or dictated to Louie, a cooking app in Israel, about their kitchen.
+- add: food they now have (bought, got, cooked leftovers). Short natural Hebrew names like a shopping list ("ביצים", "שאריות אורז"), no quantities. place: "fridge", "pantry" (dry goods, cans, bread, onions, garlic, potatoes) or "freezer".
+- remove: food that is finished, thrown out or used up. Use the exact name from the current kitchen list when it matches.
+- request: if they ask what to cook or describe a craving ("משהו חריף ומהיר", "בלי בשר"), restate it briefly in Hebrew; otherwise "".
+- Ignore anything that is not about food or cooking. Never invent items.`;
+
 type Body = {
   mode?: "inventory" | "recipe";
   images?: { data: string; media_type: string }[];
@@ -99,6 +126,8 @@ type Body = {
   prefs?: Record<string, string>;
   change_request?: string;
   avoid_titles?: string[];
+  text?: string;
+  kitchen?: string[];
 };
 
 Deno.serve(async (req) => {
@@ -118,6 +147,7 @@ Deno.serve(async (req) => {
 
   try {
     if (body.mode === "recipe") return await recipe(client, body);
+    if (body.mode === "parse") return await parseText(client, body);
     return await inventory(client, body);
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError) return json({ error: "bad_api_key" }, 500);
@@ -211,6 +241,23 @@ async function recipe(client: Anthropic, body: Body) {
   const data = parse(res);
   if ("error" in data) return json(data, 502);
   console.log(JSON.stringify({ mode: "recipe", titles: data.recipes?.map((r: { title: string }) => r.title), usage: res.usage }));
+  return json(data);
+}
+
+async function parseText(client: Anthropic, body: Body) {
+  const text = (body.text ?? "").trim().slice(0, 400);
+  if (!text) return json({ error: "empty_text" }, 400);
+  const kitchen = (body.kitchen ?? []).slice(0, 120);
+  const res = await client.messages.create({
+    model: PARSE_MODEL,
+    max_tokens: 1000,
+    system: PARSE_SYSTEM,
+    output_config: { effort: "low", format: { type: "json_schema", schema: PARSE_SCHEMA } },
+    messages: [{ role: "user", content: `Current kitchen: ${kitchen.join(", ") || "empty"}\nMessage: "${text}"` }],
+  } as Anthropic.MessageCreateParamsNonStreaming);
+  const data = parse(res);
+  if ("error" in data) return json(data, 502);
+  console.log(JSON.stringify({ mode: "parse", text, result: data, usage: res.usage }));
   return json(data);
 }
 

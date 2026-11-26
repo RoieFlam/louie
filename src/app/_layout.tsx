@@ -31,6 +31,8 @@ export default function RootLayout() {
         <StatusBar style="dark" />
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: C.bg }, animation: 'slide_from_left' }}>
           <Stack.Screen name="index" />
+          <Stack.Screen name="setup" />
+          <Stack.Screen name="home" options={{ animation: 'fade', gestureEnabled: false }} />
           <Stack.Screen name="camera" options={{ animation: 'fade' }} />
           <Stack.Screen name="loading" options={{ animation: 'fade', gestureEnabled: false }} />
           <Stack.Screen name="review" />

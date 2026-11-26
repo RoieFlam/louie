@@ -2,8 +2,9 @@ import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 
-import { Button, Chip, Mascot, Row, Screen, Sheet, Txt } from '@/components/ui';
-import { success } from '@/lib/haptics';
+import { Button, Chip, Mascot, Row, Screen, Sheet, Txt, Wrap } from '@/components/ui';
+import { success, tap } from '@/lib/haptics';
+import { same, type KitchenItem } from '@/lib/kitchen';
 import { useStore } from '@/state/store';
 import { C, R } from '@/theme';
 
@@ -14,9 +15,24 @@ export default function Cooked() {
   const [weekly, setWeekly] = useState(true);
   const [rated, setRated] = useState(false);
 
-  const home = () => router.dismissTo('/camera');
+  const home = () => router.dismissTo('/home');
   const last = s.lastCook;
   const t = s.totals;
+
+  // "What's finished?": the recipe's items that are in the kitchen. A tap removes one
+  // (and a second tap puts it back), so the kitchen stays true without any typing.
+  const [used] = useState<KitchenItem[]>(() => s.kitchen.filter((i) => (s.recipe?.uses ?? []).some((u) => same(u, i.name))));
+  const [gone, setGone] = useState<string[]>([]);
+  function toggleGone(i: KitchenItem) {
+    tap();
+    if (gone.includes(i.name)) {
+      setGone(gone.filter((n) => n !== i.name));
+      s.addToKitchen([i]);
+    } else {
+      setGone([...gone, i.name]);
+      s.removeFromKitchen([i.name]);
+    }
+  }
 
   useEffect(() => {
     success();
@@ -41,6 +57,23 @@ export default function Cooked() {
           <Txt size={16} color={C.muted} align="center">
             בישלת ממה שיש בבית, בלי משלוח.
           </Txt>
+        )}
+        {used.length > 0 && (
+          <View style={styles.used}>
+            <Txt size={15} weight="semibold" align="center">
+              משהו נגמר? לחיצה מורידה מהמטבח
+            </Txt>
+            <Wrap style={{ justifyContent: 'center' }}>
+              {used.map((i) => (
+                <Chip
+                  key={i.name}
+                  label={gone.includes(i.name) ? `✓ ${i.name} נגמר` : i.name}
+                  tone={gone.includes(i.name) ? 'missing' : 'plain'}
+                  onPress={() => toggleGone(i)}
+                />
+              ))}
+            </Wrap>
+          </View>
         )}
         <Txt size={16} color={C.muted} align="center">
           איך יצא?
@@ -165,6 +198,7 @@ function Confetti() {
 }
 
 const styles = StyleSheet.create({
+  used: { alignSelf: 'stretch', backgroundColor: C.surface, borderRadius: R.card, padding: 14, gap: 10, marginTop: 4 },
   rescue: { backgroundColor: C.freshSoft, borderRadius: R.card, paddingVertical: 12, paddingHorizontal: 18, gap: 2, marginTop: 4 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 24 },
   streak: { marginTop: 16, backgroundColor: C.freshSoft, borderRadius: R.chip, paddingVertical: 8, paddingHorizontal: 16 },

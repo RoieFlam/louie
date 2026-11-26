@@ -5,18 +5,16 @@ import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Card, LouieSays, Row, Screen, TopBar, Txt } from '@/components/ui';
-import { AnalyzeError, suggestRecipes } from '@/lib/analyze';
-import { tap } from '@/lib/haptics';
-import { sampleOptions, useStore } from '@/state/store';
+import { success, tap } from '@/lib/haptics';
+import { toKitchen } from '@/lib/kitchen';
+import { useStore } from '@/state/store';
 import { C, F, R } from '@/theme';
 
-// Step 2: "what I found". The user fixes the list before any recipe is made,
-// so the recipe call is text-only and a wrong item never costs another photo.
+// Step 2: "what I found". The user fixes the list, then it is merged into the kitchen
+// (as fridge items). Recipes are asked for from the kitchen, as text only.
 export default function Review() {
   const s = useStore();
   const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [zoom, setZoom] = useState<string | null>(null);
   const items = s.fridge;
 
@@ -34,23 +32,10 @@ export default function Review() {
     setText('');
   }
 
-  async function findRecipes() {
-    setError(null);
-    if (s.sampleMode) {
-      s.setOptions(sampleOptions());
-      router.push('/recipe');
-      return;
-    }
-    setBusy(true);
-    try {
-      const opts = await suggestRecipes(items, { prefs: s.prefs, avoidTitles: s.seenTitles });
-      s.setOptions(opts);
-      router.push('/recipe');
-    } catch (e) {
-      setError(e instanceof AnalyzeError && e.code === 'network' ? 'אין חיבור לאינטרנט. נסה שוב.' : 'לא הצלחתי למצוא מתכון. נסה שוב.');
-    } finally {
-      setBusy(false);
-    }
+  function updateKitchen() {
+    s.addToKitchen(toKitchen(items.map((i) => ({ name: i.name, place: 'fridge' as const, expiring: i.expiring }))));
+    success();
+    router.dismissTo('/home');
   }
 
   const few = items.length < 4;
@@ -58,17 +43,17 @@ export default function Review() {
 
   return (
     <Screen>
-      <TopBar step={1} onClose={() => router.dismissTo('/camera')} />
+      <TopBar step={1} onClose={() => router.dismissTo('/home')} />
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         stickyHeaderIndices={s.photos.length ? [1] : undefined}>
         <LouieSays mood={few ? 'sad' : atRisk > 0 ? 'happy' : 'curious'} hop={atRisk}>
           {few
-            ? 'המקרר די ריק. תוסיף מה שיש בארון ואמצא משהו.'
+            ? 'המקרר די ריק. אפשר להוסיף כאן מה שפספסתי.'
             : atRisk > 0
-              ? `מצאתי ${items.length} דברים, ו-${atRisk} מהם עומדים להיגמר. בוא נציל אותם 🛟`
-              : `מצאתי ${items.length} דברים. משהו עומד להיגמר? סמן אותו ואציל אותו קודם.`}
+              ? `מצאתי ${items.length} דברים, ו-${atRisk} מהם עומדים להיגמר. נציל אותם 🛟`
+              : `מצאתי ${items.length} דברים. משהו עומד להיגמר? לחיצה על "טרי" ואציל אותו קודם.`}
         </LouieSays>
 
         {s.photos.length > 0 && (
@@ -134,16 +119,7 @@ export default function Review() {
       </ScrollView>
 
       <View style={styles.actions}>
-        {error && (
-          <Txt size={14} color={C.missing} align="center">
-            {error}
-          </Txt>
-        )}
-        <Button
-          label={busy ? 'חושב על מתכונים…' : 'זה נכון, תמצא לי מתכון'}
-          disabled={busy || items.length === 0}
-          onPress={findRecipes}
-        />
+        <Button label={`לעדכן את המטבח · ${items.length} דברים`} disabled={items.length === 0} onPress={updateKitchen} />
       </View>
 
       <Modal visible={!!zoom} transparent animationType="fade" onRequestClose={() => setZoom(null)}>

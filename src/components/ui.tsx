@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
 
 // ---- Shared layout pieces, so every screen speaks the same visual language ----
 
-const STEPS = ['צילום', 'בדיקה', 'מתכון'];
+const STEPS = ['צילום', 'בדיקה', 'למטבח'];
 
 export function Steps({ active, dark }: { active: 0 | 1 | 2; dark?: boolean }) {
   return (
@@ -234,11 +234,11 @@ export function Steps({ active, dark }: { active: 0 | 1 | 2; dark?: boolean }) {
   );
 }
 
-export function TopBar({ step, onClose, dark }: { step: 0 | 1 | 2; onClose?: () => void; dark?: boolean }) {
+export function TopBar({ step, onClose, dark }: { step?: 0 | 1 | 2; onClose?: () => void; dark?: boolean }) {
   return (
     <Row style={{ justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 6 }}>
       <View style={{ width: 36 }} />
-      <Steps active={step} dark={dark} />
+      {step === undefined ? <View /> : <Steps active={step} dark={dark} />}
       {onClose ? (
         <Pressable
           onPress={onClose}

@@ -12,14 +12,8 @@ import { C, R } from '@/theme';
 
 const MAX_PHOTOS = 3;
 
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 12) return 'בוקר טוב!';
-  if (h < 17) return 'צהריים טובים!';
-  return 'ערב טוב!';
-}
-
-// Home = live camera. Take 1-3 photos (fridge, door, drawer), then send.
+// The fast way to fill the kitchen: 1-3 photos (fridge, door, drawer), then send.
+// What Louie finds is checked on the review screen and merged into the kitchen.
 export default function Camera() {
   const s = useStore();
   const cam = useRef<CameraView>(null);
@@ -67,8 +61,8 @@ export default function Camera() {
   const t = s.totals;
   const c =
     t.meals > 0
-      ? { icon: '🛟', title: t.rescued > 0 ? `הצלת ${t.rescued} מצרכים · כ-₪${t.saved}` : `בישלת ${t.meals} ארוחות מהמקרר`, sub: 'יש משהו שעומד להיגמר? צלם ונציל אותו.' }
-      : { icon: '🛟', title: 'צלם את המקרר, ואמצא מה להציל', sub: 'מה שעומד להיגמר נכנס למתכון קודם.' };
+      ? { icon: '🛟', title: t.rescued > 0 ? `הצלת ${t.rescued} מצרכים · כ-₪${t.saved}` : `בישלת ${t.meals} ארוחות מהמקרר`, sub: 'מה שעומד להיגמר נכנס למתכון קודם.' }
+      : { icon: '🛟', title: 'צילום אחד, וכל המקרר במטבח', sub: 'מה שעומד להיגמר נכנס למתכון קודם.' };
   const hasShots = shots.length > 0;
 
   return (
@@ -82,19 +76,25 @@ export default function Camera() {
       <View style={styles.shadeBottom} pointerEvents="none" />
 
       <SafeAreaView style={styles.overlay} edges={['top', 'bottom']}>
-        <View style={{ paddingTop: 8 }}>
+        <Row style={styles.top}>
+          <View style={{ width: 36 }} />
           <Steps active={0} dark />
-        </View>
+          <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="סגירה" style={styles.close}>
+            <Txt size={15} align="center" color="#FFFFFF">
+              ✕
+            </Txt>
+          </Pressable>
+        </Row>
         <Row gap={12} style={styles.header}>
           <View style={styles.avatar}>
             <Mascot mood="happy" size={40} />
           </View>
           <View style={{ flex: 1 }}>
             <Txt size={22} weight="bold" color="#FFFFFF">
-              {hasShots ? 'עוד מדף?' : `${greeting()} מה יש במקרר?`}
+              {hasShots ? 'עוד מדף?' : 'מה יש במקרר?'}
             </Txt>
             <Txt size={14} color="#E3F1F9">
-              {hasShots ? 'צילום של הדלת או המגירה עוזר לי לראות יותר.' : 'פתח את המקרר וצלם את כל המדפים.'}
+              {hasShots ? 'צילום של הדלת או המגירה עוזר לי לראות יותר.' : 'פותחים את המקרר ומצלמים את כל המדפים. אני אוסיף למטבח מה שאני רואה.'}
             </Txt>
           </View>
         </Row>
@@ -163,16 +163,6 @@ export default function Camera() {
           </Pressable>
         </Row>
 
-        {!hasShots && (
-          <Pressable onPress={() => {
-              s.startSample();
-              router.push('/loading');
-            }} accessibilityRole="button" style={{ paddingVertical: 6 }}>
-            <Txt size={12} color="#B9D3E3" align="center" style={{ textDecorationLine: 'underline' }}>
-              אין מקרר מול העיניים? נסה דוגמה
-            </Txt>
-          </Pressable>
-        )}
       </SafeAreaView>
 
       <Sheet
@@ -207,6 +197,8 @@ const styles = StyleSheet.create({
   shadeTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 180, backgroundColor: 'rgba(15,42,61,0.55)' },
   shadeBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 230, backgroundColor: 'rgba(15,42,61,0.55)' },
   overlay: { flex: 1, width: '100%', maxWidth: 480, alignSelf: 'center' },
+  top: { justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8 },
+  close: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' },
   header: { paddingHorizontal: 20, paddingTop: 12, alignItems: 'flex-start' },
   avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: C.accentSoft, alignItems: 'center', justifyContent: 'center' },
   card: { marginHorizontal: 20, marginBottom: 16, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 16, paddingVertical: 10, paddingHorizontal: 12 },

@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { Button, Row, Screen, Txt } from '@/components/ui';
+import { success } from '@/lib/haptics';
+import { same, toKitchen } from '@/lib/kitchen';
 import { useStore } from '@/state/store';
 import { C, F, R } from '@/theme';
 
@@ -11,11 +13,10 @@ export default function Shopping() {
   const [extra, setExtra] = useState<string[]>([]);
   const [text, setText] = useState('');
   const auto = useMemo(() => {
-    const have = new Set(s.fridge.map((i) => i.name));
-    const fromStaples = (s.staples ?? []).filter((x) => !have.has(x));
+    const fromStaples = (s.staples ?? []).filter((x) => !s.kitchen.some((i) => same(i.name, x)));
     const fromRecipe = (s.recipe?.missing ?? []).filter((m) => !m.optional).map((m) => m.name);
     return Array.from(new Set([...fromRecipe, ...fromStaples]));
-  }, [s.staples, s.fridge, s.recipe]);
+  }, [s.staples, s.kitchen, s.recipe]);
   const missing = Array.from(new Set([...auto, ...extra]));
   function add() {
     const n = text.trim();
@@ -34,12 +35,14 @@ export default function Shopping() {
           </Txt>
           <Pressable onPress={() => router.replace('/staples')} accessibilityRole="button">
             <Txt size={14} weight="medium" color={C.accent}>
-              ערוך רשימת בסיס
+              עריכת רשימת הבסיס
             </Txt>
           </Pressable>
         </Row>
         <Txt size={15} color={C.muted}>
-          {s.fridge.length ? `לפי המקרר שלך חסרים ${missing.length} דברים` : 'עוד לא צילמת את המקרר, אז זו רשימת הבסיס שלך'}
+          {missing.length
+            ? `לפי המטבח שלך ${missing.length === 1 ? 'חסר דבר אחד' : `חסרים ${missing.length} דברים`}. מה שמסמנים נכנס למטבח.`
+            : 'יש לך הכל! אפשר להוסיף כאן עוד דברים.'}
         </Txt>
         <View style={styles.list}>
           <Row gap={8} style={styles.addRow}>
@@ -82,7 +85,16 @@ export default function Shopping() {
         </View>
       </ScrollView>
       <View style={styles.bottom}>
-        <Button label={checked.length === missing.length && missing.length > 0 ? 'קניתי הכל!' : 'חזרה למצלמה'} onPress={() => router.dismissTo('/camera')} />
+        <Button
+          label={checked.length ? (checked.length === 1 ? 'קניתי · נכנס למטבח' : `קניתי · ${checked.length} נכנסים למטבח`) : 'חזרה למטבח'}
+          onPress={() => {
+            if (checked.length) {
+              s.addToKitchen(toKitchen(checked.map((name) => ({ name }))));
+              success();
+            }
+            router.dismissTo('/home');
+          }}
+        />
       </View>
     </Screen>
   );
