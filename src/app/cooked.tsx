@@ -58,7 +58,7 @@ export default function Cooked() {
           <Button label="לא משהו" kind="secondary" style={{ width: 150 }} onPress={home} />
         </Row>
         <Txt size={13} color={C.muted} align="center">
-          Louie יזכור את זה למתכון הבא
+          אזכור את זה למתכון הבא
         </Txt>
         <View style={styles.streak}>
           <Txt size={14} weight="semibold" color={C.fresh} align="center">

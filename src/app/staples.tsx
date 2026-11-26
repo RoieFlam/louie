@@ -30,7 +30,7 @@ export default function Staples() {
           לפני הקנייה הראשונה: מה תמיד צריך להיות בבית?
         </Txt>
         <Txt size={15} color={C.muted}>
-          רק הפעם. מעכשיו Louie יבדוק בתמונה מה חסר.
+          רק הפעם. מעכשיו אני אבדוק בתמונה מה חסר.
         </Txt>
         <Wrap style={{ marginTop: 12 }}>
           {[...STAPLES, ...custom].map((x) => (

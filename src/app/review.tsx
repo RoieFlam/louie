@@ -129,7 +129,7 @@ export default function Review() {
           ))}
         </Card>
         <Txt size={13} color={C.muted} align="center">
-          ✕ מוחק מצרך. לחיצה על "טרי" מסמנת שהוא עומד להיגמר, ו-Louie ינסה להציל אותו.
+          ✕ מוחק מצרך. לחיצה על "טרי" מסמנת שהוא עומד להיגמר, ואני אנסה להציל אותו.
         </Txt>
       </ScrollView>
 
@@ -140,7 +140,7 @@ export default function Review() {
           </Txt>
         )}
         <Button
-          label={busy ? 'Louie חושב על מתכונים…' : 'זה נכון, תמצא לי מתכון'}
+          label={busy ? 'חושב על מתכונים…' : 'זה נכון, תמצא לי מתכון'}
           disabled={busy || items.length === 0}
           onPress={findRecipes}
         />
