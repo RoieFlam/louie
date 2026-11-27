@@ -73,20 +73,20 @@ const RECIPE_SCHEMA = {
   properties: { recipes: { type: "array", items: ONE_RECIPE } },
 };
 
-const INVENTORY_SYSTEM = `You list what is inside a fridge from photos, for a cooking app in Israel.
+const INVENTORY_SYSTEM = `You list what is inside a fridge from photos, for a cooking app.
 - Go shelf by shelf (top to bottom), then the door shelves, then the drawers, across all photos (they show the same fridge). Read Hebrew and English labels on packages and jars.
-- Return every distinct food item you can identify, up to 40, no duplicates. Names in short, natural Hebrew, like a shopping list ("גבינה לבנה", "מחית קארי", "רוטב סויה").
+- Return every distinct food item you can identify, up to 40, no duplicates. Names short and natural, like a shopping list (in Hebrew: "גבינה לבנה", "מחית קארי", "רוטב סויה").
 - Only things you can actually see. Never invent. If you can't tell what a package is, skip it unless it is clearly food you can name generically ("יוגורט", "רוטב"). Do NOT list vague containers like "קופסה כחולה" or "קרטון כתום".
 - Skip water, ice, medicine and non-food.
 - expiring=true only for produce that clearly needs to be used in 1-2 days.
 - problem: "too_dark", "blurry", "not_a_fridge" or "almost_empty" when that is the case, else "none".`;
 
-const RECIPE_SYSTEM = `You are Louie, a cooking buddy for students in Israel. Given what the user has, suggest exactly 3 different dinners they can cook now (different styles, e.g. one pan dish, one pasta/rice, one quick no-fuss option).
-- Everything in natural, casual Hebrew (masculine singular is fine).
+const RECIPE_SYSTEM = `You are Louie, a cooking buddy for students. Given what the user has, suggest exactly 3 different dinners they can cook now (different styles, e.g. one pan dish, one pasta/rice, one quick no-fuss option).
+- Everything in natural, casual language; address the user in gender-neutral wording where the language allows.
 - Build it mainly from the given items; prefer items marked as expiring. Assume a basic pantry: salt, pepper, oil, sugar, flour, common spices (never list them).
 - uses: the exact item names from the list that the recipe uses.
 - missing: at most 2 things to buy; optional=true if the dish works without it. extra_cost: rough shekel cost of non-optional missing items (0 if none).
-- Cheap and simple, at most 30 minutes unless asked otherwise. level: "קל מאוד", "קל" or "בינוני".
+- Cheap and simple, at most 30 minutes unless asked otherwise. level: "very easy", "easy" or "medium", translated (in Hebrew: "קל מאוד", "קל", "בינוני").
 - Order the 3 recipes best first. Titles short (2-5 words).
 - 3 to 6 short steps, one action each. tip: a short practical hint or "". timer_sec only for timed cooking/waiting, else 0.
 - emoji: one food emoji that matches the dish.
@@ -99,7 +99,14 @@ type Body = {
   prefs?: Record<string, string>;
   change_request?: string;
   avoid_titles?: string[];
+  lang?: string; // BCP-47 code of the app language, e.g. "he", "en", "es"
 };
+
+// The app can run in any language; Claude writes every user-facing word in it. Default: Hebrew.
+function langRule(lang?: string) {
+  const code = (lang ?? "he").toLowerCase().replace(/[^a-z-]/g, "").slice(0, 12) || "he";
+  return `\n- Write every user-facing word (item names, titles, steps, tips, levels) in the language with code "${code}". Keep brand names as printed.`;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -144,7 +151,7 @@ async function inventory(client: Anthropic, body: Body) {
   const params = {
     model: VISION_MODEL,
     max_tokens: 16000,
-    system: INVENTORY_SYSTEM,
+    system: INVENTORY_SYSTEM + langRule(body.lang),
     thinking: { type: "adaptive" }, // look shelf by shelf instead of answering at a glance
     output_config: { effort: "medium", format: { type: "json_schema", schema: INVENTORY_SCHEMA } },
     messages: [{
@@ -205,7 +212,7 @@ async function recipe(client: Anthropic, body: Body) {
   const res = await client.messages.create({
     model: RECIPE_MODEL,
     max_tokens: 5000,
-    system: RECIPE_SYSTEM,
+    system: RECIPE_SYSTEM + langRule(body.lang),
     output_config: { effort: "low", format: { type: "json_schema", schema: RECIPE_SCHEMA } },
     messages: [{ role: "user", content: lines.join("\n") }],
   } as Anthropic.MessageCreateParamsNonStreaming);
