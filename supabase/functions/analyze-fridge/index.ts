@@ -1,12 +1,14 @@
-// Louie server function. Two modes, so photos are sent to Claude only once:
+// Louie server function. Three modes, so photos are sent to Claude only once:
 //   mode "inventory": fridge photo(s) -> list of items + problem flag (vision, strong model)
 //   mode "recipe":    confirmed item list (text) -> 3 recipes in one call (cheap model)
+//   mode "parse":     one sentence from the Louie bar -> items to add/remove + a recipe request (cheapest model)
 // Inventory streams the model text so the app shows items as they are found; final JSON follows a DONE marker.
 // The Anthropic key is read from the ANTHROPIC_API_KEY secret. It never reaches the app.
 import Anthropic from "npm:@anthropic-ai/sdk@1.7.0";
 
-const VISION_MODEL = "claude-opus-5-5"; // best at reading packed shelves and Hebrew labels
+const VISION_MODEL = "claude-opus-5-5"; // best at reading packed shelves and small labels (Hebrew, English and more)
 const RECIPE_MODEL = "claude-sonnet-5-5"; // text only, ~5x cheaper per call
+const PARSE_MODEL = "claude-haiku-5-5"; // one short sentence -> JSON, a fraction of an agora
 const MAX_IMAGES = 3;
 const MAX_IMAGE_B64 = 6_600_000; // ~5MB decoded, the API limit
 
@@ -27,8 +29,14 @@ const INVENTORY_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["name", "expiring"],
-        properties: { name: { type: "string" }, expiring: { type: "boolean" } },
+        required: ["seen", "name", "sure", "expiring"],
+        properties: {
+          // Written first, so the name is grounded in what is actually visible.
+          seen: { type: "string" },
+          name: { type: "string" },
+          sure: { type: "boolean" },
+          expiring: { type: "boolean" },
+        },
       },
     },
   },
@@ -73,13 +81,15 @@ const RECIPE_SCHEMA = {
   properties: { recipes: { type: "array", items: ONE_RECIPE } },
 };
 
-const INVENTORY_SYSTEM = `You list what is inside a fridge from photos, for a cooking app.
-- Go shelf by shelf (top to bottom), then the door shelves, then the drawers, across all photos (they show the same fridge). Read Hebrew and English labels on packages and jars.
-- Return every distinct food item you can identify, up to 40, no duplicates. Names short and natural, like a shopping list (in Hebrew: "גבינה לבנה", "מחית קארי", "רוטב סויה").
-- Only things you can actually see. Never invent. If you can't tell what a package is, skip it unless it is clearly food you can name generically ("יוגורט", "רוטב"). Do NOT list vague containers like "קופסה כחולה" or "קרטון כתום".
+const INVENTORY_SYSTEM = `You list the food visible in photos of a home fridge, freezer or pantry, for a cooking app. The user checks your list before it is saved, so an honest "not sure" is better than a guess.
+- Work through each photo systematically: shelf by shelf from top to bottom, then door shelves, then drawers. Look at every package, jar, bottle, bag and loose item, including ones that are partly hidden or at the edges. Read Hebrew and English labels.
+- For each item, first write "seen": where it is and what you actually see (e.g. "photo 1, door, small jar, label 'חרדל'", "photo 2, drawer, 3 red bell peppers"). Then the name.
+- name: short and natural, like a shopping list (in Hebrew: "גבינה לבנה", "מחית קארי", "רוטב סויה"). No brands unless the brand is the product ("נוטלה").
+- sure=true only when the label is readable or the food itself is plainly visible (fruit, vegetables, eggs). sure=false when you are inferring from shape, color or context (an unlabeled jar, an opaque container, a blurry label). Do not guess what is inside closed opaque containers; skip them unless the label says.
+- Only list what is in these photos. Never add items because they are typical of a kitchen. One entry per product, even if there are several of it.
 - Skip water, ice, medicine and non-food.
 - expiring=true only for produce that clearly needs to be used in 1-2 days.
-- problem: "too_dark", "blurry", "not_a_fridge" or "almost_empty" when that is the case, else "none".`;
+- problem: "too_dark", "blurry", "not_a_fridge" (not a fridge, freezer or pantry) or "almost_empty" when that is the case, else "none".`;
 
 const RECIPE_SYSTEM = `You are Louie, a cooking buddy for students. Given what the user has, suggest exactly 3 different dinners they can cook now (different styles, e.g. one pan dish, one pasta/rice, one quick no-fuss option).
 - Everything in natural, casual language; address the user in gender-neutral wording where the language allows.
@@ -92,21 +102,48 @@ const RECIPE_SYSTEM = `You are Louie, a cooking buddy for students. Given what t
 - emoji: one food emoji that matches the dish.
 - Follow preferences and the change request strictly (e.g. vegetarian = no meat or fish).`;
 
-type Body = {
-  mode?: "inventory" | "recipe";
-  images?: { data: string; media_type: string }[];
-  items?: { name: string; expiring?: boolean }[];
-  prefs?: Record<string, string>;
-  change_request?: string;
-  avoid_titles?: string[];
-  lang?: string; // BCP-47 code of the app language, e.g. "he", "en", "es"
+const PARSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["add", "remove", "request"],
+  properties: {
+    add: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "place"],
+        properties: { name: { type: "string" }, place: { type: "string", enum: ["fridge", "pantry", "freezer"] } },
+      },
+    },
+    remove: { type: "array", items: { type: "string" } },
+    request: { type: "string" },
+  },
 };
+
+const PARSE_SYSTEM = `You read one short message a user typed or dictated to Louie, a cooking app, about their kitchen.
+- add: food they now have (bought, got, cooked leftovers). Names short and natural, like a shopping list (in Hebrew: "ביצים", "שאריות אורז"), no quantities. place: "fridge", "pantry" (dry goods, cans, bread, onions, garlic, potatoes) or "freezer".
+- remove: food that is finished, thrown out or used up. Use the exact name from the current kitchen list when it matches.
+- request: if they ask what to cook or describe a craving ("משהו חריף ומהיר", "בלי בשר"), restate it briefly; otherwise "".
+- Ignore anything that is not about food or cooking. Never invent items.`;
 
 // The app can run in any language; Claude writes every user-facing word in it. Default: Hebrew.
 function langRule(lang?: string) {
   const code = (lang ?? "he").toLowerCase().replace(/[^a-z-]/g, "").slice(0, 12) || "he";
   return `\n- Write every user-facing word (item names, titles, steps, tips, levels) in the language with code "${code}". Keep brand names as printed.`;
 }
+
+type Body = {
+  lang?: string; // BCP-47 code of the app language, e.g. "he", "en", "es"
+  mode?: "inventory" | "recipe" | "parse";
+  images?: { data: string; media_type: string }[];
+  items?: { name: string; expiring?: boolean }[];
+  prefs?: Record<string, string>;
+  change_request?: string;
+  avoid_titles?: string[];
+  text?: string;
+  kitchen?: string[];
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -125,6 +162,7 @@ Deno.serve(async (req) => {
 
   try {
     if (body.mode === "recipe") return await recipe(client, body);
+    if (body.mode === "parse") return await parseText(client, body);
     return await inventory(client, body);
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError) return json({ error: "bad_api_key" }, 500);
@@ -150,9 +188,10 @@ async function inventory(client: Anthropic, body: Body) {
   }
   const params = {
     model: VISION_MODEL,
-    max_tokens: 16000,
+    max_tokens: 16000, // room for thinking at medium effort; the item list itself is ~500 tokens
     system: INVENTORY_SYSTEM + langRule(body.lang),
-    thinking: { type: "adaptive" }, // look shelf by shelf instead of answering at a glance
+    thinking: { type: "adaptive" },
+    // medium (Opus 5.5's default): at low it answered from a quick glance with no reasoning.
     output_config: { effort: "medium", format: { type: "json_schema", schema: INVENTORY_SCHEMA } },
     messages: [{
       role: "user",
@@ -178,7 +217,7 @@ async function inventory(client: Anthropic, body: Body) {
         const res = await stream.finalMessage();
         const data = parse(res);
         final = data;
-        console.log(JSON.stringify({ mode: "inventory", images: images.length, problem: data.problem, n: data.items?.length, items: data.items?.map((i: { name: string }) => i.name), usage: res.usage }));
+        console.log(JSON.stringify({ mode: "inventory", images: images.length, problem: data.problem, n: data.items?.length, items: data.items?.map((i: { name: string; sure?: boolean; seen?: string }) => `${i.name}${i.sure === false ? "?" : ""} [${i.seen ?? ""}]`), usage: res.usage }));
       } catch (e) {
         final = { error: errorCode(e) };
         console.log(JSON.stringify({ inventory_error: String(e) }));
@@ -219,6 +258,23 @@ async function recipe(client: Anthropic, body: Body) {
   const data = parse(res);
   if ("error" in data) return json(data, 502);
   console.log(JSON.stringify({ mode: "recipe", titles: data.recipes?.map((r: { title: string }) => r.title), usage: res.usage }));
+  return json(data);
+}
+
+async function parseText(client: Anthropic, body: Body) {
+  const text = (body.text ?? "").trim().slice(0, 400);
+  if (!text) return json({ error: "empty_text" }, 400);
+  const kitchen = (body.kitchen ?? []).slice(0, 120);
+  const res = await client.messages.create({
+    model: PARSE_MODEL,
+    max_tokens: 1000,
+    system: PARSE_SYSTEM + langRule(body.lang),
+    output_config: { effort: "low", format: { type: "json_schema", schema: PARSE_SCHEMA } },
+    messages: [{ role: "user", content: `Current kitchen: ${kitchen.join(", ") || "empty"}\nMessage: "${text}"` }],
+  } as Anthropic.MessageCreateParamsNonStreaming);
+  const data = parse(res);
+  if ("error" in data) return json(data, 502);
+  console.log(JSON.stringify({ mode: "parse", n_add: data.add?.length, n_remove: data.remove?.length, usage: res.usage }));
   return json(data);
 }
 
