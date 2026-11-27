@@ -143,9 +143,10 @@ async function inventory(client: Anthropic, body: Body) {
   }
   const params = {
     model: VISION_MODEL,
-    max_tokens: 6000,
+    max_tokens: 16000,
     system: INVENTORY_SYSTEM,
-    output_config: { effort: "low", format: { type: "json_schema", schema: INVENTORY_SCHEMA } },
+    thinking: { type: "adaptive" }, // look shelf by shelf instead of answering at a glance
+    output_config: { effort: "medium", format: { type: "json_schema", schema: INVENTORY_SCHEMA } },
     messages: [{
       role: "user",
       content: [
